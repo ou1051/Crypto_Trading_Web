@@ -1,47 +1,32 @@
 package main
- 
-import (
-	"log"
-	"net/url"
- 
-	"github.com/gorilla/websocket"
-)
- 
-type JsonRPC2 struct {
-	Version string `json:"jsonrpc"`
-	Method string `json:"method"`
-	Params interface{} `json:"params"`
-	Result interface{} `json:"result,omitempty"`
-	Id *int `json:"id,omitempty"`
+
+import "os"
+
+type Page struct {
+	Title string
+	Body  []byte
 }
-type SubscribeParams struct {
-	Channel string `json:"channel"`
+
+func (p *Page) save() error {
+	filename := p.Title + ".txt"
+	return os.WriteFile(filename, p.Body, 0600)
 }
- 
-func main() {
-	u := url.URL{Scheme: "wss", Host: "ws.lightstream.bitflyer.com", Path: "/json-rpc"}
-	log.Printf("connecting to %s", u.String())
- 
-	c, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
+
+func loadPage(title string) (*Page, error) {
+	filename := title + ".txt"
+	body, err := os.ReadFile(filename)
 	if err != nil {
-		log.Fatal("dial:", err)
+		return nil, err
 	}
-	defer c.Close()
- 
-	if err := c.WriteJSON(&JsonRPC2{Version: "2.0", Method: "subscribe", Params: &SubscribeParams{"lightning_ticker_BTC_JPY"}}); err != nil {
-		log.Fatal("subscribe:", err)
-		return
-	}
- 
-	for {
-		message := new(JsonRPC2)
-		if err := c.ReadJSON(message); err != nil {
-			log.Println("read:", err)
-			return
-		}
- 
-		if message.Method == "channelMessage" {
-			log.Println(message.Params);
-		}
-	}
+	return &Page{Title: title, Body: body}, nil
+}
+
+
+
+func main() {
+	p1 := &Page{Title: "test", Body: []byte("This is a sample page.")}
+	p1.save()
+
+	p2, _ := loadPage(p1.Title)
+	println(string(p2.Body))
 }
