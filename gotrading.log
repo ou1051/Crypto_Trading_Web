@@ -1,3 +1,244 @@
 2026/10/24 17:34:04 main.go:11: Logging settings initialized.
 2026/10/24 17:36:45 main.go:11: Logging settings initialized.
 2026/10/24 17:37:25 main.go:11: Logging settings initialized.
+2026/10/24 18:46:42 main.go:11: Logging settings initialized.
+2026/10/24 18:49:33 bitflyer.go:59: action=doRequest endpoint=https://api.bitflyer.com/me/getbalance
+2026/10/24 18:49:34 bitflyer.go:94: action=GetBalance response=
+
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    
+
+<!-- Google Tag Manager -->
+<script>
+    (function (w, d, s, l, i) {
+        w[l] = w[l] || []; w[l].push({
+            'gtm.start':
+                new Date().getTime(), event: 'gtm.js'
+        }); var f = d.getElementsByTagName(s)[0],
+            j = d.createElement(s), dl = l != 'dataLayer' ? '&l=' + l : ''; j.async = true; j.src =
+                'https://www.googletagmanager.com/gtm.js?id=' + i + dl; f.parentNode.insertBefore(j, f);
+    })(window, document, 'script', 'dataLayer', 'GTM-TWV92L');</script>
+<!-- End Google Tag Manager -->
+    <link rel="apple-touch-icon" sizes="57x57" href="/Content/apple-icon-57x57.png">
+    <link rel="apple-touch-icon" sizes="60x60" href="/Content/apple-icon-60x60.png">
+    <link rel="apple-touch-icon" sizes="72x72" href="/Content/apple-icon-72x72.png">
+    <link rel="apple-touch-icon" sizes="76x76" href="/Content/apple-icon-76x76.png">
+    <link rel="apple-touch-icon" sizes="114x114" href="/Content/apple-icon-114x114.png">
+    <link rel="apple-touch-icon" sizes="120x120" href="/Content/apple-icon-120x120.png">
+    <link rel="apple-touch-icon" sizes="144x144" href="/Content/apple-icon-144x144.png">
+    <link rel="apple-touch-icon" sizes="152x152" href="/Content/apple-icon-152x152.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/Content/apple-icon-180x180.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/Content/android-icon-192x192.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/Content/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="96x96" href="/Content/favicon-96x96.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/Content/favicon-16x16.png">
+    <link rel="manifest" href="/Content/manifest.json">
+    <meta name="msapplication-TileColor" content="#ffffff">
+    <meta name="msapplication-TileImage" content="/Content/ms-icon-144x144.png">
+    <meta name="theme-color" content="#ffffff">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <title>bitFlyer Lightning ビットコイン取引所</title>
+    <link href="/Content/default?v=H5tPywoy6JIcPbv7NHVLlp6ddVMyChQtoL05ykslaYA1" rel="stylesheet"/>
+
+    <script>
+(function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+(i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+})(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+ga('create', 'UA-64393818-1', 'auto');
+ga('send', 'pageview');
+</script>
+</head>
+<body class="404">
+     
+
+<!-- Google Tag Manager (noscript) -->
+<noscript>
+    <iframe src="https://www.googletagmanager.com/ns.html?id=GTM-TWV92L"
+            height="0" width="0" style="display:none;visibility:hidden"></iframe>
+</noscript>
+<!-- End Google Tag Manager (noscript) -->
+    <div class="top-bar">
+        <div class="top-bar__ticker" style="line-height:50px;">
+            <span style="line-height:50px;">
+                <img src="/Content/LightningLogo.png" class="logo" alt="Lightning Bitcoin Exchange by bitFlyer">
+            </span>
+        </div>
+    </div>
+    <main>
+        <section style="text-align: center; margin-top: 100px;">
+            <h1>NOT FOUND</h1>
+            <ul>
+                <li><a href="/">Back to Home</a></li>
+                <li><a href="https://bitflyer.com/">bitFlyer</a></li>
+            </ul>
+        </section>
+    </main>
+</body>
+</html>
+2026/10/24 18:49:34 bitflyer.go:103: action=GetBalance err=invalid character '<' looking for beginning of value
+2026/10/24 18:49:42 bitflyer.go:59: action=doRequest endpoint=https://api.bitflyer.com/me/getbalance
+2026/10/24 18:49:42 bitflyer.go:94: action=GetBalance response=
+
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    
+
+<!-- Google Tag Manager -->
+<script>
+    (function (w, d, s, l, i) {
+        w[l] = w[l] || []; w[l].push({
+            'gtm.start':
+                new Date().getTime(), event: 'gtm.js'
+        }); var f = d.getElementsByTagName(s)[0],
+            j = d.createElement(s), dl = l != 'dataLayer' ? '&l=' + l : ''; j.async = true; j.src =
+                'https://www.googletagmanager.com/gtm.js?id=' + i + dl; f.parentNode.insertBefore(j, f);
+    })(window, document, 'script', 'dataLayer', 'GTM-TWV92L');</script>
+<!-- End Google Tag Manager -->
+    <link rel="apple-touch-icon" sizes="57x57" href="/Content/apple-icon-57x57.png">
+    <link rel="apple-touch-icon" sizes="60x60" href="/Content/apple-icon-60x60.png">
+    <link rel="apple-touch-icon" sizes="72x72" href="/Content/apple-icon-72x72.png">
+    <link rel="apple-touch-icon" sizes="76x76" href="/Content/apple-icon-76x76.png">
+    <link rel="apple-touch-icon" sizes="114x114" href="/Content/apple-icon-114x114.png">
+    <link rel="apple-touch-icon" sizes="120x120" href="/Content/apple-icon-120x120.png">
+    <link rel="apple-touch-icon" sizes="144x144" href="/Content/apple-icon-144x144.png">
+    <link rel="apple-touch-icon" sizes="152x152" href="/Content/apple-icon-152x152.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/Content/apple-icon-180x180.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/Content/android-icon-192x192.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/Content/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="96x96" href="/Content/favicon-96x96.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/Content/favicon-16x16.png">
+    <link rel="manifest" href="/Content/manifest.json">
+    <meta name="msapplication-TileColor" content="#ffffff">
+    <meta name="msapplication-TileImage" content="/Content/ms-icon-144x144.png">
+    <meta name="theme-color" content="#ffffff">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <title>bitFlyer Lightning ビットコイン取引所</title>
+    <link href="/Content/default?v=H5tPywoy6JIcPbv7NHVLlp6ddVMyChQtoL05ykslaYA1" rel="stylesheet"/>
+
+    <script>
+(function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+(i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+})(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+ga('create', 'UA-64393818-1', 'auto');
+ga('send', 'pageview');
+</script>
+</head>
+<body class="404">
+     
+
+<!-- Google Tag Manager (noscript) -->
+<noscript>
+    <iframe src="https://www.googletagmanager.com/ns.html?id=GTM-TWV92L"
+            height="0" width="0" style="display:none;visibility:hidden"></iframe>
+</noscript>
+<!-- End Google Tag Manager (noscript) -->
+    <div class="top-bar">
+        <div class="top-bar__ticker" style="line-height:50px;">
+            <span style="line-height:50px;">
+                <img src="/Content/LightningLogo.png" class="logo" alt="Lightning Bitcoin Exchange by bitFlyer">
+            </span>
+        </div>
+    </div>
+    <main>
+        <section style="text-align: center; margin-top: 100px;">
+            <h1>NOT FOUND</h1>
+            <ul>
+                <li><a href="/">Back to Home</a></li>
+                <li><a href="https://bitflyer.com/">bitFlyer</a></li>
+            </ul>
+        </section>
+    </main>
+</body>
+</html>
+2026/10/24 18:49:42 bitflyer.go:103: action=GetBalance err=invalid character '<' looking for beginning of value
+2026/10/24 18:50:13 bitflyer.go:59: action=doRequest endpoint=https://api.bitflyer.com/me/getbalance
+2026/10/24 18:50:13 bitflyer.go:94: action=GetBalance response=
+
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    
+
+<!-- Google Tag Manager -->
+<script>
+    (function (w, d, s, l, i) {
+        w[l] = w[l] || []; w[l].push({
+            'gtm.start':
+                new Date().getTime(), event: 'gtm.js'
+        }); var f = d.getElementsByTagName(s)[0],
+            j = d.createElement(s), dl = l != 'dataLayer' ? '&l=' + l : ''; j.async = true; j.src =
+                'https://www.googletagmanager.com/gtm.js?id=' + i + dl; f.parentNode.insertBefore(j, f);
+    })(window, document, 'script', 'dataLayer', 'GTM-TWV92L');</script>
+<!-- End Google Tag Manager -->
+    <link rel="apple-touch-icon" sizes="57x57" href="/Content/apple-icon-57x57.png">
+    <link rel="apple-touch-icon" sizes="60x60" href="/Content/apple-icon-60x60.png">
+    <link rel="apple-touch-icon" sizes="72x72" href="/Content/apple-icon-72x72.png">
+    <link rel="apple-touch-icon" sizes="76x76" href="/Content/apple-icon-76x76.png">
+    <link rel="apple-touch-icon" sizes="114x114" href="/Content/apple-icon-114x114.png">
+    <link rel="apple-touch-icon" sizes="120x120" href="/Content/apple-icon-120x120.png">
+    <link rel="apple-touch-icon" sizes="144x144" href="/Content/apple-icon-144x144.png">
+    <link rel="apple-touch-icon" sizes="152x152" href="/Content/apple-icon-152x152.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/Content/apple-icon-180x180.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/Content/android-icon-192x192.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/Content/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="96x96" href="/Content/favicon-96x96.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/Content/favicon-16x16.png">
+    <link rel="manifest" href="/Content/manifest.json">
+    <meta name="msapplication-TileColor" content="#ffffff">
+    <meta name="msapplication-TileImage" content="/Content/ms-icon-144x144.png">
+    <meta name="theme-color" content="#ffffff">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <title>bitFlyer Lightning ビットコイン取引所</title>
+    <link href="/Content/default?v=H5tPywoy6JIcPbv7NHVLlp6ddVMyChQtoL05ykslaYA1" rel="stylesheet"/>
+
+    <script>
+(function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+(i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+})(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+ga('create', 'UA-64393818-1', 'auto');
+ga('send', 'pageview');
+</script>
+</head>
+<body class="404">
+     
+
+<!-- Google Tag Manager (noscript) -->
+<noscript>
+    <iframe src="https://www.googletagmanager.com/ns.html?id=GTM-TWV92L"
+            height="0" width="0" style="display:none;visibility:hidden"></iframe>
+</noscript>
+<!-- End Google Tag Manager (noscript) -->
+    <div class="top-bar">
+        <div class="top-bar__ticker" style="line-height:50px;">
+            <span style="line-height:50px;">
+                <img src="/Content/LightningLogo.png" class="logo" alt="Lightning Bitcoin Exchange by bitFlyer">
+            </span>
+        </div>
+    </div>
+    <main>
+        <section style="text-align: center; margin-top: 100px;">
+            <h1>NOT FOUND</h1>
+            <ul>
+                <li><a href="/">Back to Home</a></li>
+                <li><a href="https://bitflyer.com/">bitFlyer</a></li>
+            </ul>
+        </section>
+    </main>
+</body>
+</html>
+2026/10/24 18:50:13 bitflyer.go:103: action=GetBalance err=invalid character '<' looking for beginning of value
