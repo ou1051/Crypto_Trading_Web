@@ -2,4 +2,7 @@ module gotrading
 
 go 1.27.2
 
-require gopkg.in/ini.v1 v1.67.3
+require (
+	github.com/gorilla/websocket v1.5.3
+	gopkg.in/ini.v1 v1.67.3
+)
