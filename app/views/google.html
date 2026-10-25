@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="ja">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{.ProductCode}} ローソク足チャート</title>
+    <style>
+        body { margin: 32px auto; padding: 0 20px; max-width: 1100px; font-family: sans-serif; color: #25313c; }
+        h1 { font-size: 24px; }
+        #chart_div { width: 100%; min-height: 500px; }
+        .note { color: #596673; }
+    </style>
+    <script src="https://www.gstatic.com/charts/loader.js"></script>
+</head>
+<body>
+    <h1>{{.ProductCode}} ローソク足チャート</h1>
+    <p class="note">足の長さ：{{.Duration}} ／ 時刻：UTC</p>
+    {{if not .Rows}}<p>データを収集中です。少し待ってページを再読み込みしてください。</p>{{end}}
+    <div id="chart_div" role="img" aria-label="{{.ProductCode}}のローソク足チャート"></div>
+    <p class="note">最新のデータを表示するには、ページを再読み込みしてください。</p>
+    <script>
+        const rows = {{.Rows}};
+        if (typeof google === 'undefined') {
+            document.getElementById('chart_div').textContent = 'チャートを読み込めませんでした。インターネット接続を確認してください。';
+        } else {
+            google.charts.load('current', {packages: ['corechart']});
+            google.charts.setOnLoadCallback(drawChart);
+        }
+        function drawChart() {
+            if (rows.length === 0) return;
+            const data = new google.visualization.DataTable();
+            data.addColumn('string', '時刻（UTC）');
+            data.addColumn('number', '安値');
+            data.addColumn('number', '始値');
+            data.addColumn('number', '終値');
+            data.addColumn('number', '高値');
+            data.addRows(rows);
+            const chart = new google.visualization.CandlestickChart(document.getElementById('chart_div'));
+            chart.draw(data, {
+                height: 500,
+                legend: 'none',
+                candlestick: {
+                    fallingColor: {strokeWidth: 0, fill: '#a52714'},
+                    risingColor: {strokeWidth: 0, fill: '#0f9d58'}
+                }
+            });
+        }
+        window.addEventListener('resize', function () {
+            if (typeof google !== 'undefined' && google.visualization) drawChart();
+        });
+    </script>
+</body>
+</html>

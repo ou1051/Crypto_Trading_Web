@@ -4,3 +4,7 @@
 
 *.exe
 /bin/
+
+/stockdata.sql
+/stockdata.sql-wal
+/stockdata.sql-shm
