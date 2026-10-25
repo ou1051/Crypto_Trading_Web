@@ -17,7 +17,7 @@ import (
 	"gotrading/config"
 )
 
-var templates = template.Must(template.ParseFS(views.Files, "google.html"))
+var templates = template.Must(template.ParseFS(views.Files, "chart.html"))
 
 type JSONError struct {
 	Error string `json:"error"`
@@ -26,6 +26,7 @@ type JSONError struct {
 
 func APIError(w http.ResponseWriter, message string, code int) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(code)
 	if err := json.NewEncoder(w).Encode(JSONError{Error: message, Code: code}); err != nil {
 		log.Printf("action=APIError err=%s", err)
@@ -73,33 +74,31 @@ func viewChartHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	productCode, duration, limit, err := candleParameters(r, false, "1s", 100)
+	productCode, duration, limit, err := candleParameters(r, false, "1m", 365)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	df, err := models.GetAllCandle(productCode, duration, limit)
-	if err != nil {
-		log.Printf("action=viewChart err=%s", err)
-		http.Error(w, "failed to load candle data", http.StatusInternalServerError)
-		return
-	}
-	rows := make([][]any, 0, len(df.Candles))
-	for _, candle := range df.Candles {
-		rows = append(rows, []any{candle.Time.UTC().Format("2006-01-02 15:04:05"), candle.Low, candle.Open, candle.Close, candle.High})
+	durationName := ""
+	for name, value := range config.Config.Durations {
+		if value == duration {
+			durationName = name
+			break
+		}
 	}
 	page := struct {
 		ProductCode string
 		Duration    string
-		Rows        [][]any
-	}{ProductCode: productCode, Duration: duration.String(), Rows: rows}
+		Limit       int
+	}{ProductCode: productCode, Duration: durationName, Limit: limit}
 	var body bytes.Buffer
-	if err := templates.ExecuteTemplate(&body, "google.html", page); err != nil {
+	if err := templates.ExecuteTemplate(&body, "chart.html", page); err != nil {
 		log.Printf("action=viewChart render_err=%s", err)
 		http.Error(w, "failed to render chart", http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
 	if _, err := body.WriteTo(w); err != nil {
 		log.Printf("action=viewChart write_err=%s", err)
 	}
@@ -139,6 +138,7 @@ func apiCandleHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
 	if _, err := w.Write(body); err != nil {
 		log.Printf("action=apiCandle write_err=%s", err)
 	}
@@ -147,6 +147,7 @@ func apiCandleHandler(w http.ResponseWriter, r *http.Request) {
 func NewRouter() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/chart/", viewChartHandler)
+	mux.Handle("/static/", http.FileServer(http.FS(views.Files)))
 	mux.HandleFunc("/api/candle/", apiMakeHandler(apiCandleHandler))
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		APIError(w, "not found", http.StatusNotFound)

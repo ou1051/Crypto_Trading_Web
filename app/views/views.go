@@ -2,5 +2,5 @@ package views
 
 import "embed"
 
-//go:embed google.html
+//go:embed chart.html static/*.js
 var Files embed.FS

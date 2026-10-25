@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="ja">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{.ProductCode}} ローソク足チャート</title>
+    <style>
+        body { margin: 32px auto; padding: 0 20px; max-width: 1100px; font-family: sans-serif; color: #25313c; }
+        h1 { font-size: 24px; }
+        .toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+        button { padding: 8px 16px; border: 1px solid #a6b2bd; border-radius: 4px; background: white; color: inherit; cursor: pointer; }
+        button[aria-pressed="true"] { background: #25313c; color: white; }
+        button:focus-visible { outline: 3px solid #4285f4; outline-offset: 3px; }
+        #dashboard_div { width: 100%; min-width: 0; }
+        #chart_div { height: 440px; }
+        #filter_div { height: 90px; }
+        .note { color: #596673; }
+        #chart_status[data-error="true"] { color: #a52714; }
+    </style>
+    <script src="https://www.gstatic.com/charts/loader.js"></script>
+    <script src="/static/chart.js" defer></script>
+</head>
+<body>
+    <main id="chart_app" data-product-code="{{.ProductCode}}" data-duration="{{.Duration}}" data-limit="{{.Limit}}">
+        <h1>{{.ProductCode}} ローソク足チャート</h1>
+        <div class="toolbar" role="group" aria-label="時間足の切り替え">
+            <button type="button" data-duration="1s" aria-pressed="{{eq .Duration "1s"}}">秒足（1s）</button>
+            <button type="button" data-duration="1m" aria-pressed="{{eq .Duration "1m"}}">分足（1m）</button>
+            <button type="button" data-duration="1h" aria-pressed="{{eq .Duration "1h"}}">時間足（1h）</button>
+        </div>
+        <p class="note">3秒ごとに自動更新します。チャートの操作中は更新を一時停止します。</p>
+        <p id="chart_status" role="status" aria-live="polite">ローソク足データを読み込んでいます。</p>
+        <div id="dashboard_div" hidden>
+            <div id="chart_div" role="img" aria-label="{{.ProductCode}}のローソク足チャート"></div>
+            <div id="filter_div" aria-label="チャートの表示範囲"></div>
+        </div>
+        <p class="note">下のスライダーで表示範囲を変更できます。時刻はUTCで表示します。</p>
+        <noscript>チャートを表示するにはJavaScriptを有効にしてください。</noscript>
+    </main>
+</body>
+</html>

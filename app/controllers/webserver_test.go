@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -92,42 +91,54 @@ func TestEmptyCandleAPIAndChart(t *testing.T) {
 		if strings.HasPrefix(target, "/api/") && !strings.Contains(w.Body.String(), `"candles":[]`) {
 			t.Errorf("empty candles must be [], got %s", w.Body)
 		}
-		if target == "/chart/" && !strings.Contains(w.Body.String(), "データを収集中") {
-			t.Error("empty chart must explain that data is being collected")
+		if target == "/chart/" && !strings.Contains(w.Body.String(), "/static/chart.js") {
+			t.Error("chart must load data asynchronously")
 		}
 	}
 }
 
-func TestChartEmbedsCandlesInGoogleColumnOrder(t *testing.T) {
+func TestChartPassesSettingsToAjaxClient(t *testing.T) {
 	setupApplication(t)
-	seedCandles(t)
 	w := httptest.NewRecorder()
 	NewRouter().ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/chart/?duration=1s&limit=2", nil))
-	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "google.visualization.CandlestickChart") {
+	if w.Code != http.StatusOK {
 		t.Fatalf("chart did not render: status=%d body=%s", w.Code, w.Body)
 	}
-	match := regexp.MustCompile(`const rows = ([^;]+);`).FindStringSubmatch(w.Body.String())
-	if len(match) != 2 {
-		t.Fatalf("chart has no embedded candle data: %s", w.Body)
-	}
-	var rows [][]any
-	if err := json.Unmarshal([]byte(match[1]), &rows); err != nil {
-		t.Fatal(err)
-	}
-	if len(rows) != 2 || len(rows[0]) != 5 || rows[0][0] != "2026-10-25 10:00:01" || rows[0][1] != float64(91) || rows[0][2] != float64(101) || rows[0][3] != float64(106) || rows[0][4] != float64(111) {
-		t.Fatalf("Google columns must be time, low, open, close, high: %+v", rows)
+	for _, expected := range []string{`data-product-code="BTC_USD"`, `data-duration="1s" data-limit="2"`, `id="filter_div"`, `data-duration="1h"`, `src="/static/chart.js"`} {
+		if !strings.Contains(w.Body.String(), expected) {
+			t.Errorf("chart is missing %q", expected)
+		}
 	}
 }
 
 func TestClosedDatabaseReturnsServerError(t *testing.T) {
 	setupApplication(t)
 	models.DbConnection.Close()
-	for _, target := range []string{"/api/candle/?product_code=BTC_USD", "/chart/"} {
+	for _, target := range []string{"/api/candle/?product_code=BTC_USD"} {
 		w := httptest.NewRecorder()
 		NewRouter().ServeHTTP(w, httptest.NewRequest(http.MethodGet, target, nil))
 		if w.Code != http.StatusInternalServerError || strings.Contains(w.Body.String(), "database is closed") {
 			t.Fatalf("unexpected database error response: status=%d body=%s", w.Code, w.Body)
 		}
+	}
+	// The chart shell must still load so that its Ajax client can report API failures.
+	w := httptest.NewRecorder()
+	NewRouter().ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/chart/", nil))
+	if w.Code != http.StatusOK {
+		t.Fatalf("chart shell must not query the database: status=%d body=%s", w.Code, w.Body)
+	}
+}
+
+func TestEmbeddedChartScriptIsServed(t *testing.T) {
+	w := httptest.NewRecorder()
+	NewRouter().ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/static/chart.js", nil))
+	if w.Code != http.StatusOK || !strings.Contains(w.Header().Get("Content-Type"), "javascript") || !strings.Contains(w.Body.String(), "ChartRangeFilter") {
+		t.Fatalf("script was not served: status=%d type=%s", w.Code, w.Header().Get("Content-Type"))
+	}
+	w = httptest.NewRecorder()
+	NewRouter().ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/static/chart.html", nil))
+	if w.Code != http.StatusNotFound {
+		t.Error("static route must not expose templates")
 	}
 }
 
