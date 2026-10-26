@@ -5,10 +5,15 @@
     const status = document.getElementById('chart_status');
     const container = document.getElementById('dashboard_div');
     const buttons = [...app.querySelectorAll('button[data-duration]')];
+    const technicalForm = document.getElementById('technical_form');
+    const indicators = window.CandleIndicators;
     const refreshInterval = 3000;
     const requestTimeout = 15000;
     let duration = app.dataset.duration;
     let dashboard;
+    let chartsLoaded = false;
+    let charts = [];
+    let layoutSignature;
     let rangeControl;
     let dataTable;
     let selectedRange = null;
@@ -70,31 +75,17 @@
         dashboard.draw(dataTable);
     }
 
-    function candleTable(candles) {
-        const table = new google.visualization.DataTable();
-        table.addColumn('datetime', '時刻（UTC）');
-        table.addColumn('number', '安値');
-        table.addColumn('number', '始値');
-        table.addColumn('number', '終値');
-        table.addColumn('number', '高値');
-        table.addColumn('number', '出来高');
-        const rows = candles.map(candle => {
-            const date = new Date(candle.time);
-            const values = [candle.low, candle.open, candle.close, candle.high, candle.volume];
-            if (!Number.isFinite(date.getTime()) || !values.every(Number.isFinite)) {
-                throw new Error('invalid candle data');
-            }
-            return [date, ...values];
-        });
-        table.addRows(rows);
-        new google.visualization.DateFormat({pattern: 'yyyy-MM-dd HH:mm:ss', timeZone: 0}).format(table, 0);
-        return table;
-    }
-
     async function refresh() {
         clearTimeout(timer);
         if (stopped || paused()) return;
         cancelRequest();
+        let selected;
+        try {
+            selected = indicators.settings(technicalForm);
+        } catch (error) {
+            message(error.message, true);
+            return;
+        }
         const id = requestID;
         const current = new AbortController();
         controller = current;
@@ -102,20 +93,22 @@
         const params = new URLSearchParams({
             product_code: app.dataset.productCode, duration, limit: app.dataset.limit
         });
+        for (const [name, value] of selected.params) params.set(name, value);
         try {
             const response = await fetch(`/api/candle/?${params}`, {signal: current.signal, cache: 'no-store'});
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const data = await response.json();
             if (id !== requestID || stopped) return;
             if (!Array.isArray(data.candles)) throw new Error('invalid candle response');
-            const table = candleTable(data.candles);
-            dataTable = table;
-            if (table.getNumberOfRows() === 0) {
+            const layout = indicators.layout(data, selected, duration);
+            dataTable = layout.table;
+            if (dataTable.getNumberOfRows() === 0) {
                 container.hidden = true;
                 selectedRange = null;
                 message('データを収集中です。データが届くと自動で表示します。');
             } else {
                 container.hidden = false;
+                if (layoutSignature !== layout.signature) rebuildDashboard(layout);
                 draw();
                 message(`${data.candles.length}本のローソク足を表示しています。`);
             }
@@ -136,7 +129,7 @@
         if (paused()) {
             cancelRequest();
             message('チャートの操作中は自動更新を一時停止しています。');
-        } else if (dashboard && !stopped) {
+        } else if (chartsLoaded && !stopped) {
             refresh();
         }
     }
@@ -152,9 +145,19 @@
             container.hidden = true;
             for (const item of buttons) item.setAttribute('aria-pressed', String(item.dataset.duration === duration));
             message('ローソク足データを読み込んでいます。');
-            if (dashboard) refresh();
+            if (chartsLoaded) refresh();
         });
     }
+    function settingsChanged() {
+        for (const toggle of technicalForm.querySelectorAll('input[data-indicator]')) {
+            for (const input of technicalForm.querySelectorAll(`input[data-for="${toggle.dataset.indicator}"]`)) input.disabled = !toggle.checked;
+        }
+        cancelRequest();
+        message('指標を更新しています。');
+        if (chartsLoaded) refresh();
+    }
+    technicalForm.addEventListener('change', settingsChanged);
+    technicalForm.addEventListener('submit', event => { event.preventDefault(); settingsChanged(); });
     container.addEventListener('mouseenter', () => { hovering = true; interactionChanged(); });
     container.addEventListener('mouseleave', () => { hovering = false; interactionChanged(); });
     container.addEventListener('focusin', () => { focused = true; interactionChanged(); });
@@ -167,7 +170,7 @@
     window.addEventListener('pageshow', event => {
         if (event.persisted) {
             stopped = false;
-            if (dashboard) refresh();
+            if (chartsLoaded) refresh();
         }
     });
     let resizeTimer;
@@ -181,20 +184,13 @@
         return;
     }
     google.charts.load('current', {packages: ['corechart', 'controls'], language: 'ja'});
-    google.charts.setOnLoadCallback(() => {
+    function rebuildDashboard(layout) {
+        for (const wrapper of [...charts, dashboard, rangeControl].filter(Boolean)) {
+            google.visualization.events.removeAllListeners(wrapper);
+            wrapper.getChart?.()?.clearChart?.();
+        }
         dashboard = new google.visualization.Dashboard(container);
-        const mainChart = new google.visualization.ChartWrapper({
-            chartType: 'ComboChart', containerId: 'chart_div',
-            options: {
-                height: 440, legend: 'none', seriesType: 'candlesticks',
-                hAxis: {slantedText: false},
-                candlestick: {
-                    fallingColor: {strokeWidth: 0, fill: '#a52714'},
-                    risingColor: {strokeWidth: 0, fill: '#0f9d58'}
-                }
-            },
-            view: {columns: [{calc: (table, row) => table.getFormattedValue(row, 0), type: 'string'}, 1, 2, 3, 4]}
-        });
+        charts = indicators.charts(layout);
         rangeControl = new google.visualization.ControlWrapper({
             controlType: 'ChartRangeFilter', containerId: 'filter_div',
             options: {
@@ -208,7 +204,11 @@
             drawing = false;
             message('チャートを描画できませんでした。次の更新で再試行します。', true);
         });
-        dashboard.bind(rangeControl, mainChart);
+        dashboard.bind(rangeControl, charts);
+        layoutSignature = layout.signature;
+    }
+    google.charts.setOnLoadCallback(() => {
+        chartsLoaded = true;
         refresh();
     });
 })();

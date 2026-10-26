@@ -125,11 +125,19 @@ func apiCandleHandler(w http.ResponseWriter, r *http.Request) {
 		APIError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	indicators, err := parseIndicators(r.URL.Query())
+	if err != nil {
+		APIError(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 	df, err := models.GetAllCandle(productCode, duration, limit)
 	if err != nil {
 		log.Printf("action=apiCandle err=%s", err)
 		APIError(w, "failed to load candle data", http.StatusInternalServerError)
 		return
+	}
+	for _, add := range indicators {
+		add(df)
 	}
 	body, err := json.Marshal(df)
 	if err != nil {

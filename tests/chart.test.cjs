@@ -5,6 +5,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 
 const source = fs.readFileSync(path.join(__dirname, '../app/views/static/chart.js'), 'utf8');
+const indicatorSource = fs.readFileSync(path.join(__dirname, '../app/views/static/indicators.js'), 'utf8');
 const flush = () => new Promise(resolve => setImmediate(resolve));
 
 class Element {
@@ -34,8 +35,25 @@ function application({withGoogle = true, respectAbort = false} = {}) {
     const container = new Element();
     container.hidden = true;
     const document = new Element();
-    const elements = {chart_app: root, chart_status: status, dashboard_div: container};
-    document.getElementById = id => elements[id];
+    const form = new Element();
+    const toggles = ['sma', 'ema', 'bbands', 'ichimoku', 'volume', 'rsi', 'macd', 'hv'].map(indicator => {
+        const input = new Element({indicator}); input.checked = false; return input;
+    });
+    const inputs = [];
+    for (const [group, parameters] of Object.entries({sma: {smaPeriod1:7,smaPeriod2:14,smaPeriod3:50},ema:{emaPeriod1:7,emaPeriod2:14,emaPeriod3:50},bbands:{bbandsN:20,bbandsK:2},rsi:{rsiPeriod:14},macd:{macdPeriod1:12,macdPeriod2:26,macdPeriod3:9},hv:{hvPeriod1:21,hvPeriod2:63,hvPeriod3:252}})) {
+        for (const [name,value] of Object.entries(parameters)) {
+            const input = new Element({for:group});
+            Object.assign(input, {name,value:String(value),disabled:true}); inputs.push(input);
+        }
+    }
+    form.checkValidity = () => inputs.every(input => input.disabled || (Number(input.value) >= (input.name === 'bbandsK' ? .1 : 2) && Number(input.value) <= (input.name === 'bbandsK' ? 10 : 1000)));
+    form.querySelectorAll = selector => {
+        if (selector === 'input[data-indicator]') return toggles;
+        if (selector === 'input[data-for]') return inputs;
+        return inputs.filter(input => selector === `input[data-for="${input.dataset.for}"]`);
+    };
+    const elements = {chart_app: root, chart_status: status, dashboard_div: container, technical_form: form};
+    document.getElementById = id => elements[id] ||= new Element();
     document.hidden = false;
     const window = new Element();
     const requests = [];
@@ -48,7 +66,8 @@ function application({withGoogle = true, respectAbort = false} = {}) {
             if (!target.listeners) target.listeners = new Element();
             target.listeners.addEventListener(type, handler);
         },
-        trigger(target, type) { target.listeners?.emit(type); }
+        trigger(target, type) { target.listeners?.emit(type); },
+        removeAllListeners(target) { target.listeners = new Element(); }
     };
     const sandbox = {
         document, window, AbortController, URLSearchParams, console,
@@ -81,7 +100,7 @@ function application({withGoogle = true, respectAbort = false} = {}) {
             },
             Dashboard: class {
                 constructor(element) { assert.equal(element, container); }
-                bind(control, chart) { observed.control = control; observed.chart = chart; }
+                bind(control, charts) { observed.control = control; observed.charts = charts; observed.chart = charts[0]; }
                 draw(table) { draws.push(table); events.trigger(this, 'ready'); }
             },
             ChartWrapper: class { constructor(options) { this.options = options; } },
@@ -92,13 +111,15 @@ function application({withGoogle = true, respectAbort = false} = {}) {
             }
         }
     };
-    vm.runInNewContext(source, sandbox);
+    vm.runInNewContext(indicatorSource + '\n' + source, sandbox);
     return {
         root, status, container, document, window, requests, timers, draws, observed,
         change(duration) { buttons.find(button => button.dataset.duration === duration).emit('click'); },
         buttons,
-        async respond(index, candles, statusCode = 200) {
-            requests[index].resolve({ok: statusCode === 200, status: statusCode, json: async () => ({candles})});
+        enable(name, checked=true) { toggles.find(input => input.dataset.indicator === name).checked = checked; form.emit('change'); },
+        parameter(name, value) { inputs.find(input => input.name === name).value = String(value); form.emit('change'); },
+        async respond(index, candles, statusCode = 200, extra = {}) {
+            requests[index].resolve({ok: statusCode === 200, status: statusCode, json: async () => ({...extra,candles})});
             await flush();
         },
         async tick(delay = 3000) {
@@ -222,4 +243,51 @@ test('reports a missing chart library and rejects malformed candle timestamps', 
     await app.respond(0, [{...candles(1)[0], time: 'invalid'}]);
     assert.equal(app.draws.length, 0);
     assert.equal(app.status.dataset.error, 'true');
+});
+
+test('indicator controls send selected periods and refuse invalid settings', async () => {
+    const app = application();
+    app.enable('sma');
+    let params = new URL(app.requests.at(-1).url, 'http://localhost').searchParams;
+    assert.equal(params.get('sma'), 'true');
+    assert.equal(params.get('smaPeriod1'), '7');
+    app.parameter('smaPeriod1', 9);
+    params = new URL(app.requests.at(-1).url, 'http://localhost').searchParams;
+    assert.equal(params.get('smaPeriod1'), '9');
+    const count = app.requests.length;
+    app.parameter('smaPeriod1', 0);
+    assert.equal(app.requests.length, count);
+    assert.equal(app.status.dataset.error, 'true');
+    app.enable('sma', false);
+    assert.equal(app.requests.length, count + 1, 'disabled invalid fields must not prevent polling');
+    app.enable('macd');
+    const before = app.requests.length;
+    app.parameter('macdPeriod1', 30);
+    assert.equal(app.requests.length, before);
+    assert.match(app.status.textContent, /短期期間/);
+});
+
+test('all indicators build linked charts, retain null warmups and project Ichimoku 26 bars', async () => {
+    const app = application();
+    for (const name of ['sma','ema','bbands','ichimoku','volume','rsi','macd','hv']) app.enable(name);
+    const n = 80;
+    const values = Array.from({length:n},(_,i)=>i < 7 ? null : 100);
+    const extra = {
+        smas:[{period:7,values}], emas:[{period:7,values}],
+        bbands:{n:20,k:2,up:values,mid:values,down:values},
+        ichimoku:{tenkan:values,kijun:values,senkoua:[...values,...Array(26).fill(110)],senkoub:[...values,...Array(26).fill(90)],chikou:values,displacement:26},
+        rsi:{period:14,values},macd:{fast_period:12,slow_period:26,signal_period:9,macd:values,macd_signal:values,macd_hist:values},hvs:[{period:21,values}]
+    };
+    await app.respond(app.requests.length-1,candles(n),200,extra);
+    assert.equal(app.observed.charts.length,5);
+    assert.equal(app.draws.at(-1).getNumberOfRows(),n+26);
+    assert.equal(app.draws.at(-1).rows[0][6],null,'warmup must remain null');
+    assert.equal(app.draws.at(-1).rows[n][1],null,'projected dates must not invent candle prices');
+    assert.equal(app.draws.at(-1).rows.at(-1)[0].getTime(), start+(n-1+26)*minute);
+    assert.equal(app.observed.chart.options.options.series[1].type,'line');
+    app.enable('volume',false);
+    app.enable('rsi',false);
+    delete extra.rsi;
+    await app.respond(app.requests.length-1,candles(n),200,extra);
+    assert.equal(app.observed.charts.length,3,'disabled subcharts must be removed');
 });

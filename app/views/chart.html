@@ -14,10 +14,21 @@
         #dashboard_div { width: 100%; min-width: 0; }
         #chart_div { height: 440px; }
         #filter_div { height: 90px; }
+        #technical_form { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 10px; margin-top: 16px; }
+        fieldset { min-width: 0; margin: 0; padding: 10px; border: 1px solid #d3dbe2; border-radius: 4px; }
+        fieldset legend { padding: 0 4px; }
+        fieldset label { font-size: 13px; }
+        input[type="number"] { width: 64px; box-sizing: border-box; padding: 5px; }
+        input:invalid { border-color: #a52714; }
+        .parameters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+        .technical-panel { border-top: 1px solid #d3dbe2; }
+        .technical-panel h2 { margin: 12px 0 0; font-size: 15px; }
+        .technical-chart { height: 170px; }
         .note { color: #596673; }
         #chart_status[data-error="true"] { color: #a52714; }
     </style>
     <script src="https://www.gstatic.com/charts/loader.js"></script>
+    <script src="/static/indicators.js" defer></script>
     <script src="/static/chart.js" defer></script>
 </head>
 <body>
@@ -28,10 +39,69 @@
             <button type="button" data-duration="1m" aria-pressed="{{eq .Duration "1m"}}">分足（1m）</button>
             <button type="button" data-duration="1h" aria-pressed="{{eq .Duration "1h"}}">時間足（1h）</button>
         </div>
+        <form id="technical_form" aria-label="テクニカル指標の設定">
+            <fieldset>
+                <legend><label><input type="checkbox" data-indicator="sma"> SMA（単純移動平均）</label></legend>
+                <div class="parameters">期間
+                    <input type="number" name="smaPeriod1" data-for="sma" aria-label="SMAの短期期間" value="7" min="2" max="1000" required disabled>
+                    <input type="number" name="smaPeriod2" data-for="sma" aria-label="SMAの中期期間" value="14" min="2" max="1000" required disabled>
+                    <input type="number" name="smaPeriod3" data-for="sma" aria-label="SMAの長期期間" value="50" min="2" max="1000" required disabled>
+                </div>
+            </fieldset>
+            <fieldset>
+                <legend><label><input type="checkbox" data-indicator="ema"> EMA（指数平滑移動平均）</label></legend>
+                <div class="parameters">期間
+                    <input type="number" name="emaPeriod1" data-for="ema" aria-label="EMAの短期期間" value="7" min="2" max="1000" required disabled>
+                    <input type="number" name="emaPeriod2" data-for="ema" aria-label="EMAの中期期間" value="14" min="2" max="1000" required disabled>
+                    <input type="number" name="emaPeriod3" data-for="ema" aria-label="EMAの長期期間" value="50" min="2" max="1000" required disabled>
+                </div>
+            </fieldset>
+            <fieldset>
+                <legend><label><input type="checkbox" data-indicator="bbands"> ボリンジャーバンド</label></legend>
+                <div class="parameters">
+                    <label>期間 <input type="number" name="bbandsN" data-for="bbands" value="20" min="2" max="1000" required disabled></label>
+                    <label>標準偏差の倍率 <input type="number" name="bbandsK" data-for="bbands" value="2" min="0.1" max="10" step="0.1" required disabled></label>
+                </div>
+            </fieldset>
+            <fieldset>
+                <legend><label><input type="checkbox" data-indicator="ichimoku"> 一目均衡表</label></legend>
+                <span class="note">9・26・52期間／先行・遅行26本</span>
+            </fieldset>
+            <fieldset>
+                <legend><label><input type="checkbox" data-indicator="volume"> 出来高</label></legend>
+                <span class="note">Tickerの24時間出来高の増分による概算</span>
+            </fieldset>
+            <fieldset>
+                <legend><label><input type="checkbox" data-indicator="rsi"> RSI</label></legend>
+                <label>期間 <input type="number" name="rsiPeriod" data-for="rsi" value="14" min="2" max="1000" required disabled></label>
+                <span class="note">基準線：30・70</span>
+            </fieldset>
+            <fieldset>
+                <legend><label><input type="checkbox" data-indicator="macd"> MACD</label></legend>
+                <div class="parameters">
+                    <label>短期 <input type="number" name="macdPeriod1" data-for="macd" value="12" min="2" max="1000" required disabled></label>
+                    <label>長期 <input type="number" name="macdPeriod2" data-for="macd" value="26" min="2" max="1000" required disabled></label>
+                    <label>シグナル <input type="number" name="macdPeriod3" data-for="macd" value="9" min="2" max="1000" required disabled></label>
+                </div>
+            </fieldset>
+            <fieldset>
+                <legend><label><input type="checkbox" data-indicator="hv"> HV（ヒストリカルボラティリティ）</label></legend>
+                <div class="parameters">期間
+                    <input type="number" name="hvPeriod1" data-for="hv" aria-label="HVの短期期間" value="21" min="2" max="1000" required disabled>
+                    <input type="number" name="hvPeriod2" data-for="hv" aria-label="HVの中期期間" value="63" min="2" max="1000" required disabled>
+                    <input type="number" name="hvPeriod3" data-for="hv" aria-label="HVの長期期間" value="252" min="2" max="1000" required disabled>
+                </div>
+            </fieldset>
+        </form>
+        <p class="note">指標は必要な本数がそろうと表示します。期間は選択中の時間足の本数です。HVは1本ごとの変動率（%）です。</p>
         <p class="note">3秒ごとに自動更新します。チャートの操作中は更新を一時停止します。</p>
         <p id="chart_status" role="status" aria-live="polite">ローソク足データを読み込んでいます。</p>
         <div id="dashboard_div" hidden>
             <div id="chart_div" role="img" aria-label="{{.ProductCode}}のローソク足チャート"></div>
+            <section id="volume_panel" class="technical-panel" hidden><h2>出来高（概算）</h2><div id="volume_chart" class="technical-chart"></div></section>
+            <section id="rsi_panel" class="technical-panel" hidden><h2>RSI</h2><div id="rsi_chart" class="technical-chart"></div></section>
+            <section id="macd_panel" class="technical-panel" hidden><h2>MACD</h2><div id="macd_chart" class="technical-chart"></div></section>
+            <section id="hv_panel" class="technical-panel" hidden><h2>HV（%／足）</h2><div id="hv_chart" class="technical-chart"></div></section>
             <div id="filter_div" aria-label="チャートの表示範囲"></div>
         </div>
         <p class="note">下のスライダーで表示範囲を変更できます。時刻はUTCで表示します。</p>
