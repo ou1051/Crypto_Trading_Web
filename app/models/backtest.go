@@ -104,7 +104,7 @@ func (df *DataFrameCandle) indicatorFrame() *DataFrameCandle {
 	return &DataFrameCandle{ProductCode: df.ProductCode, Duration: df.Duration, Candles: df.Candles}
 }
 
-func (df *DataFrameCandle) BackTestEma(short, long int) *SignalEvents {
+func (df *DataFrameCandle) emaDecision(short, long int) func(int) (bool, bool) {
 	if short >= long {
 		return nil
 	}
@@ -113,31 +113,47 @@ func (df *DataFrameCandle) BackTestEma(short, long int) *SignalEvents {
 		return nil
 	}
 	a, b := indicators.Emas[0].Values, indicators.Emas[1].Values
-	return df.simulate(func(i int) (bool, bool) {
+	return func(i int) (bool, bool) {
 		if !finite(a[i-1], b[i-1], a[i], b[i]) {
 			return false, false
 		}
 		return a[i-1] < b[i-1] && a[i] >= b[i], a[i-1] > b[i-1] && a[i] <= b[i]
-	})
+	}
 }
 
-func (df *DataFrameCandle) BackTestBb(n int, k float64) *SignalEvents {
+func (df *DataFrameCandle) BackTestEma(short, long int) *SignalEvents {
+	decision := df.emaDecision(short, long)
+	if decision == nil {
+		return nil
+	}
+	return df.simulate(decision)
+}
+
+func (df *DataFrameCandle) bbDecision(n int, k float64) func(int) (bool, bool) {
 	indicators := df.indicatorFrame()
 	if !indicators.AddBBands(n, k) {
 		return nil
 	}
 	up, down := indicators.BBands.Up, indicators.BBands.Down
-	return df.simulate(func(i int) (bool, bool) {
+	return func(i int) (bool, bool) {
 		if !finite(up[i-1], up[i], down[i-1], down[i]) {
 			return false, false
 		}
 		previous, current := df.Candles[i-1].Close, df.Candles[i].Close
 		return previous < down[i-1] && current >= down[i], previous > up[i-1] && current <= up[i]
-	})
+	}
 }
 
-func (df *DataFrameCandle) BackTestIchimoku() *SignalEvents {
-	if len(df.Candles) < 79 {
+func (df *DataFrameCandle) BackTestBb(n int, k float64) *SignalEvents {
+	decision := df.bbDecision(n, k)
+	if decision == nil {
+		return nil
+	}
+	return df.simulate(decision)
+}
+
+func (df *DataFrameCandle) ichimokuDecision() func(int) (bool, bool) {
+	if len(df.Candles) < 78 {
 		return nil
 	}
 	indicators := df.indicatorFrame()
@@ -145,7 +161,7 @@ func (df *DataFrameCandle) BackTestIchimoku() *SignalEvents {
 		return nil
 	}
 	cloud := indicators.IchimokuCloud
-	return df.simulate(func(i int) (bool, bool) {
+	return func(i int) (bool, bool) {
 		if i < 27 || !finite(cloud.Tenkan[i], cloud.Kijun[i], cloud.SenkouA[i], cloud.SenkouB[i]) {
 			return false, false
 		}
@@ -156,24 +172,40 @@ func (df *DataFrameCandle) BackTestIchimoku() *SignalEvents {
 		buy := previous.Close < pastPrevious.High && current.Close >= pastCurrent.High && cloud.SenkouA[i] < current.Low && cloud.SenkouB[i] < current.Low && cloud.Tenkan[i] > cloud.Kijun[i]
 		sell := previous.Close > pastPrevious.Low && current.Close <= pastCurrent.Low && cloud.SenkouA[i] > current.High && cloud.SenkouB[i] > current.High && cloud.Tenkan[i] < cloud.Kijun[i]
 		return buy, sell
-	})
+	}
 }
 
-func (df *DataFrameCandle) BackTestMacd(fast, slow, signal int) *SignalEvents {
+func (df *DataFrameCandle) BackTestIchimoku() *SignalEvents {
+	decision := df.ichimokuDecision()
+	if decision == nil {
+		return nil
+	}
+	return df.simulate(decision)
+}
+
+func (df *DataFrameCandle) macdDecision(fast, slow, signal int) func(int) (bool, bool) {
 	indicators := df.indicatorFrame()
 	if !indicators.AddMacd(fast, slow, signal) {
 		return nil
 	}
 	a, b := indicators.Macd.Macd, indicators.Macd.MacdSignal
-	return df.simulate(func(i int) (bool, bool) {
+	return func(i int) (bool, bool) {
 		if !finite(a[i-1], a[i], b[i-1], b[i]) {
 			return false, false
 		}
 		return a[i] < 0 && b[i] < 0 && a[i-1] < b[i-1] && a[i] >= b[i], a[i] > 0 && b[i] > 0 && a[i-1] > b[i-1] && a[i] <= b[i]
-	})
+	}
 }
 
-func (df *DataFrameCandle) BackTestRsi(period int, buyThreshold, sellThreshold float64) *SignalEvents {
+func (df *DataFrameCandle) BackTestMacd(fast, slow, signal int) *SignalEvents {
+	decision := df.macdDecision(fast, slow, signal)
+	if decision == nil {
+		return nil
+	}
+	return df.simulate(decision)
+}
+
+func (df *DataFrameCandle) rsiDecision(period int, buyThreshold, sellThreshold float64) func(int) (bool, bool) {
 	if !finite(buyThreshold, sellThreshold) || buyThreshold <= 0 || buyThreshold >= sellThreshold || sellThreshold >= 100 {
 		return nil
 	}
@@ -182,12 +214,20 @@ func (df *DataFrameCandle) BackTestRsi(period int, buyThreshold, sellThreshold f
 		return nil
 	}
 	values := indicators.Rsi.Values
-	return df.simulate(func(i int) (bool, bool) {
+	return func(i int) (bool, bool) {
 		if !finite(values[i-1], values[i]) {
 			return false, false
 		}
 		return values[i-1] < buyThreshold && values[i] >= buyThreshold, values[i-1] > sellThreshold && values[i] <= sellThreshold
-	})
+	}
+}
+
+func (df *DataFrameCandle) BackTestRsi(period int, buyThreshold, sellThreshold float64) *SignalEvents {
+	decision := df.rsiDecision(period, buyThreshold, sellThreshold)
+	if decision == nil {
+		return nil
+	}
+	return df.simulate(decision)
 }
 
 func (df *DataFrameCandle) RunBacktest(strategy string, params map[string]float64) *SignalEvents {

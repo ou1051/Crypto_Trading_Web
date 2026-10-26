@@ -57,6 +57,11 @@ func InitDB(driver, filename, productCode string, durations map[string]time.Dura
 		return err
 	}
 	defer tx.Rollback()
+	if _, err := tx.Exec(`CREATE TABLE IF NOT EXISTS automation_state (
+		mode TEXT NOT NULL,product_code TEXT NOT NULL,duration INTEGER NOT NULL,
+		payload TEXT NOT NULL,version INTEGER NOT NULL,PRIMARY KEY(mode,product_code,duration))`); err != nil {
+		return fmt.Errorf("create automation schema: %w", err)
+	}
 	if _, err := tx.Exec(`CREATE TABLE IF NOT EXISTS ` + tableNameSignalEvents + ` (
 		time DATETIME PRIMARY KEY NOT NULL,
 		product_code TEXT, side TEXT, price REAL, size REAL)`); err != nil {

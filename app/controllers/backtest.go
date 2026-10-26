@@ -48,12 +48,12 @@ func parseBacktest(query url.Values) (backtestRequest, error) {
 			request.strategy = "ema"
 		}
 	}
-	if request.strategy == "saved" {
+	if request.strategy == "saved" || request.strategy == "auto" {
 		return request, nil
 	}
 	request.params = models.DefaultBacktestParams(request.strategy)
 	if request.params == nil {
-		return request, fmt.Errorf("strategy must be ema, bbands, ichimoku, macd, rsi, or saved")
+		return request, fmt.Errorf("strategy must be ema, bbands, ichimoku, macd, rsi, saved, or auto")
 	}
 	for name, fallback := range request.params {
 		if name == "bbandsK" {
@@ -90,7 +90,15 @@ func (request backtestRequest) apply(df *models.DataFrameCandle) error {
 		df.Optimization = df.OptimizeStrategies(limit)
 	}
 	if request.events {
-		if request.strategy == "saved" {
+		if request.strategy == "auto" {
+			df.Events = models.NewSignalEvents()
+			if ai := activeAI.Load(); ai != nil {
+				if snapshot := ai.snapshot.Load(); snapshot != nil && snapshot.status.ProductCode == df.ProductCode {
+					df.Events.Signals = append(df.Events.Signals, snapshot.events...)
+				}
+			}
+			df.Backtest = &models.BacktestResult{Strategy: "auto", Parameters: map[string]float64{}, Available: df.Automation != nil, Execution: "recorded_fills", Profit: df.Events.Profit(), CompletedTrades: df.Events.CompletedTrades()}
+		} else if request.strategy == "saved" {
 			if len(df.Candles) == 0 {
 				df.Events = models.NewSignalEvents()
 			} else if err := df.AddEvents(df.Candles[0].Time); err != nil {

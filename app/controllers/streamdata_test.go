@@ -110,3 +110,33 @@ func TestIngestionErrorsAndCancellation(t *testing.T) {
 		t.Fatalf("database error must stop ingestion immediately: %v", err)
 	}
 }
+
+func TestBarNotificationsFollowConfiguredDurationAndNeverBlockIngestion(t *testing.T) {
+	setupApplication(t)
+	start := time.Now().UTC().Truncate(time.Minute)
+	source := fakeTickerSource{tickers: []bitflyer.Ticker{
+		streamSample(start, 1, 100, 1000),
+		streamSample(start.Add(time.Second), 2, 101, 1001),
+		streamSample(start.Add(time.Minute), 3, 102, 1002),
+		streamSample(start.Add(2*time.Minute), 4, 103, 1003),
+		streamSample(start.Add(2*time.Minute+time.Second), 5, 104, 1004),
+	}}
+	bars := make(chan bitflyer.Ticker, 1)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err := ingestStreamWithBars(ctx, source, config.Config, bars); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case latest := <-bars:
+		if latest.TickID != 4 {
+			t.Fatalf("expected first tick of newest minute, got %+v", latest)
+		}
+	default:
+		t.Fatal("new candle did not notify the trading worker")
+	}
+	candle, err := models.GetCandle("BTC_USD", time.Minute, start.Add(2*time.Minute))
+	if err != nil || candle.Close != 104 {
+		t.Fatal("unconsumed trade notifications stopped ingestion", candle, err)
+	}
+}

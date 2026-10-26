@@ -16,13 +16,13 @@ func TestLoadSettingsAndPreservePlaceholders(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if settings.ApiKey != "XXXXX" || settings.ApiSecret != "XXXXX" || settings.Port != 8081 || settings.DbName != "test.sqlite" || settings.TradeDuration != time.Minute || len(settings.Durations) != 3 || !settings.BackTest || settings.DataLimit != 365 || settings.NumRanking != 3 || settings.UsePercent != .9 || settings.StopLimitPercent != .9 {
+	if settings.ApiKey != "XXXXX" || settings.ApiSecret != "XXXXX" || settings.Port != 8081 || settings.DbName != "test.sqlite" || settings.TradeDuration != time.Minute || len(settings.Durations) != 3 || !settings.BackTest || settings.DataLimit != 365 || settings.NumRanking != 3 || settings.UsePercent != .9 || settings.StopLimitPercent != .9 || settings.PaperBalance != 1000000 || settings.FeeRate != .0012 {
 		t.Fatalf("unexpected settings: %+v", settings)
 	}
 }
 
 func TestLoadRejectsInvalidSettings(t *testing.T) {
-	for _, contents := range []string{"[web]\nport = abc", "[web]\nport = 0", "[web]\nport = 65536", "[gotrading]\ntrade_duration = 10m", "[db]\ndriver = mysql", "[gotrading]\nback_test=invalid", "[gotrading]\nuse_percent=NaN", "[gotrading]\nstop_limit_percent=2", "[gotrading]\ndata_limit=0", "[gotrading]\nnum_ranking=6"} {
+	for _, contents := range []string{"[web]\nport = abc", "[web]\nport = 0", "[web]\nport = 65536", "[gotrading]\ntrade_duration = 10m", "[db]\ndriver = mysql", "[gotrading]\nback_test=invalid", "[gotrading]\nuse_percent=NaN", "[gotrading]\nstop_limit_percent=2", "[gotrading]\ndata_limit=0", "[gotrading]\nnum_ranking=6", "[gotrading]\npaper_balance=0", "[gotrading]\npaper_balance=Inf", "[gotrading]\nfee_rate=NaN", "[gotrading]\nfee_rate=-1", "[gotrading]\nfee_rate=.2"} {
 		t.Run(contents, func(t *testing.T) {
 			filename := filepath.Join(t.TempDir(), "config.ini")
 			if err := os.WriteFile(filename, []byte(contents), 0600); err != nil {

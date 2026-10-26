@@ -26,6 +26,9 @@
         .technical-chart { height: 170px; }
         .backtest-controls { margin: 16px 0; padding: 12px; border: 1px solid #d3dbe2; border-radius: 4px; }
         .backtest-controls select { padding: 7px; max-width: 100%; }
+        .automation-status { padding: 12px; margin-top: 16px; border: 1px solid #d3dbe2; border-radius: 4px; }
+        .automation-status h2 { font-size: 17px; margin-top: 0; }
+        #automation_status[data-error="true"] { color: #a52714; }
         .backtest-controls input[type="number"] { width: 64px; }
         #ranking_section { margin: 16px 0; }
         .table-scroll { max-width: 100%; overflow-x: auto; }
@@ -49,6 +52,13 @@
             <button type="button" data-duration="1m" aria-pressed="{{eq .Duration "1m"}}">分足（1m）</button>
             <button type="button" data-duration="1h" aria-pressed="{{eq .Duration "1h"}}">時間足（1h）</button>
         </div>
+        <section class="automation-status" aria-label="自動売買の稼働状態">
+            <h2>自動売買</h2>
+            <p id="automation_status" role="status">自動売買の状態を読み込んでいます。</p>
+            <p id="automation_position"></p>
+            <p id="automation_strategy" class="note"></p>
+            <p class="note">確定足で判断し、次の足で注文します。損切りも確定足の終値で判定します。表示する自動売買の損益は稼働開始からの累計です。</p>
+        </section>
         <form id="technical_form" aria-label="テクニカル指標の設定">
             <fieldset>
                 <legend><label><input type="checkbox" data-indicator="sma"> SMA（単純移動平均）</label></legend>
@@ -113,6 +123,7 @@
                         <option value="ichimoku">一目均衡表</option>
                         <option value="macd">MACD</option>
                         <option value="rsi">RSI</option>
+                        <option value="auto">自動売買の記録</option>
                         <option value="saved">保存済みイベント</option>
                     </select>
                 </label>
@@ -123,7 +134,7 @@
                 <label>買い <input type="number" id="rsi_buy" value="30" min="1" max="99" required></label>
                 <label>売り <input type="number" id="rsi_sell" value="70" min="1" max="99" required></label>
             </p>
-            <p class="note">戦略の期間・倍率は上の指標設定を使います。バックテストは1 BTC・次足始値で仮想約定し、手数料・スリッページは未反映です。確定損益には未決済分を含めません。</p>
+            <p class="note">個別戦略の期間・倍率は上の指標設定を使います。個別バックテストは1 BTC・次足始値で仮想約定し、手数料・スリッページは未反映です。自動売買の記録には実際の数量・手数料を反映します。確定損益には未決済分を含めません。</p>
             <p id="backtest_profit" role="status" hidden></p>
         </section>
         <section id="ranking_section" hidden>

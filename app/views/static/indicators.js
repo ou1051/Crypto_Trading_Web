@@ -82,7 +82,11 @@ window.CandleIndicators = (() => {
         let markers;
         const signals = new Map();
         if (data.events) {
-            for (const event of data.events.signals || []) signals.set(new Date(event.time).getTime(), event);
+            for (const event of data.events.signals || []) {
+                const bucket = Math.floor(new Date(event.time).getTime() / step) * step;
+                if (!signals.has(bucket)) signals.set(bucket, []);
+                signals.get(bucket).push(event);
+            }
             markers = {index: labels.length, annotation: labels.length+1, text: labels.length+2};
             labels.push('売買イベント','annotation','annotationText');
             table.addColumn('number','売買イベント');
@@ -96,8 +100,9 @@ window.CandleIndicators = (() => {
             if (!Number.isFinite(date.getTime()) || (candle && !values.every(Number.isFinite))) throw new Error('invalid candle data');
             const row = [date, ...values, ...vectors.map(values => nullable(values[i]))];
             if (markers) {
-                const event = signals.get(date.getTime());
-                row.push(event ? nullable(event.price) : null, event ? event.side : null, event ? `${event.side} ${event.size} BTC @ ${event.price}` : null);
+                const events = signals.get(date.getTime());
+                const event = events?.at(-1);
+                row.push(event ? nullable(event.execution_price ?? event.price) : null, events ? events.map(item => item.side).join('/') : null, events ? events.map(item => `${item.side} ${item.size} BTC @ ${item.execution_price ?? item.price}`).join('\n') : null);
             }
             rows.push(row);
         }

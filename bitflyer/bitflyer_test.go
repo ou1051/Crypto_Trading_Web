@@ -148,6 +148,54 @@ func TestSendOrder(t *testing.T) {
 	}
 }
 
+func TestCancelOwnOrderUsesSignedAcceptanceID(t *testing.T) {
+	api := New("test-key", "test-secret")
+	mockHTTP(api, http.StatusOK, "", func(request *http.Request) {
+		body, err := io.ReadAll(request.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		checkSignature(t, request, body)
+		var payload map[string]string
+		if json.Unmarshal(body, &payload) != nil || len(payload) != 2 || payload["product_code"] != "BTC_USD" || payload["child_order_acceptance_id"] != "JRF-owned" || request.Method != "POST" || request.URL.Path != "/v1/me/cancelchildorder" {
+			t.Fatalf("invalid cancellation: %s %s", request.URL, body)
+		}
+	})
+	if err := api.CancelOrderContext(context.Background(), "BTC_USD", "JRF-owned"); err != nil {
+		t.Fatal(err)
+	}
+	if err := api.CancelOrderContext(context.Background(), "BTC_USD", ""); err == nil {
+		t.Fatal("unscoped cancellation was accepted")
+	}
+}
+
+func TestPrivateRequestsHonorContextCancellation(t *testing.T) {
+	api := New("test-key", "test-secret")
+	api.httpClient.Transport = roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		<-request.Context().Done()
+		return nil, request.Context().Err()
+	})
+	for _, call := range []func(context.Context) error{
+		func(ctx context.Context) error { _, err := api.GetBalanceContext(ctx); return err },
+		func(ctx context.Context) error { _, err := api.GetTickerContext(ctx, "BTC_USD"); return err },
+		func(ctx context.Context) error {
+			_, err := api.SendOrderContext(ctx, &Order{ProductCode: "BTC_USD"})
+			return err
+		},
+		func(ctx context.Context) error {
+			_, err := api.ListOrderContext(ctx, map[string]string{"product_code": "BTC_USD"})
+			return err
+		},
+		func(ctx context.Context) error { return api.CancelOrderContext(ctx, "BTC_USD", "JRF-owned") },
+	} {
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		if err := call(ctx); !errors.Is(err, context.Canceled) {
+			t.Fatalf("context cancellation lost: %v", err)
+		}
+	}
+}
+
 func TestHTTPFailureIsNotDecodedAsJSON(t *testing.T) {
 	for _, status := range []int{http.StatusUnauthorized, http.StatusNotFound, http.StatusTooManyRequests, http.StatusInternalServerError} {
 		t.Run(http.StatusText(status), func(t *testing.T) {

@@ -95,10 +95,7 @@ func viewChartHandler(w http.ResponseWriter, r *http.Request) {
 		Duration        string
 		Limit           int
 		DefaultStrategy string
-	}{ProductCode: productCode, Duration: durationName, Limit: limit, DefaultStrategy: "saved"}
-	if config.Config.BackTest {
-		page.DefaultStrategy = "ema"
-	}
+	}{ProductCode: productCode, Duration: durationName, Limit: limit, DefaultStrategy: "auto"}
 	var body bytes.Buffer
 	if err := templates.ExecuteTemplate(&body, "chart.html", page); err != nil {
 		log.Printf("action=viewChart render_err=%s", err)
@@ -152,6 +149,12 @@ func apiCandleHandler(w http.ResponseWriter, r *http.Request) {
 	for _, add := range indicators {
 		add(df)
 	}
+	if ai := activeAI.Load(); ai != nil {
+		if snapshot := ai.snapshot.Load(); snapshot != nil && snapshot.status.ProductCode == productCode {
+			status := snapshot.status
+			df.Automation = &status
+		}
+	}
 	if err := backtest.apply(df); err != nil {
 		log.Printf("action=apiCandle events_err=%s", err)
 		APIError(w, "failed to load signal events", http.StatusInternalServerError)
@@ -175,6 +178,7 @@ func NewRouter() http.Handler {
 	mux.HandleFunc("/chart/", viewChartHandler)
 	mux.Handle("/static/", http.FileServer(http.FS(views.Files)))
 	mux.HandleFunc("/api/candle/", apiMakeHandler(apiCandleHandler))
+	mux.HandleFunc("/api/automation/", apiAutomationHandler)
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		APIError(w, "not found", http.StatusNotFound)
 	})

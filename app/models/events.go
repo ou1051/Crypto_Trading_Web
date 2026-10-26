@@ -10,11 +10,13 @@ import (
 )
 
 type SignalEvent struct {
-	Time        time.Time `json:"time"`
-	ProductCode string    `json:"product_code"`
-	Side        string    `json:"side"`
-	Price       float64   `json:"price"`
-	Size        float64   `json:"size"`
+	Time           time.Time `json:"time"`
+	ProductCode    string    `json:"product_code"`
+	Side           string    `json:"side"`
+	Price          float64   `json:"price"`
+	Size           float64   `json:"size"`
+	ExecutionPrice float64   `json:"execution_price,omitempty"`
+	Commission     float64   `json:"commission,omitempty"`
 }
 
 func validAmount(value float64) bool { return value > 0 && !math.IsInf(value, 0) && !math.IsNaN(value) }
@@ -161,19 +163,31 @@ func (s *SignalEvents) Sell(product string, stamp time.Time, price, size float64
 }
 
 func (s *SignalEvents) summary() (profit float64, trades int, holding bool) {
-	var buy *SignalEvent
+	var quantity, cost float64
+	var product string
+	var previous time.Time
 	for i := range s.Signals {
 		event := &s.Signals[i]
-		if event.Side == "BUY" && buy == nil {
-			buy = event
+		if !validProductCode.MatchString(event.ProductCode) || !validAmount(event.Price) || !validAmount(event.Size) || event.Time.IsZero() ||
+			(product != "" && event.ProductCode != product) || !previous.Before(event.Time) {
+			continue
 		}
-		if event.Side == "SELL" && buy != nil && buy.ProductCode == event.ProductCode && buy.Size == event.Size && buy.Time.Before(event.Time) {
-			profit += (event.Price - buy.Price) * event.Size
+		if event.Side == "BUY" {
+			product = event.ProductCode
+			quantity += event.Size
+			cost += event.Price * event.Size
+			previous = event.Time
+		}
+		if event.Side == "SELL" && quantity > 0 && event.Size <= quantity+1e-10 {
+			average := cost / quantity
+			profit += (event.Price - average) * event.Size
+			quantity = math.Max(0, quantity-event.Size)
+			cost = average * quantity
 			trades++
-			buy = nil
+			previous = event.Time
 		}
 	}
-	return profit, trades, buy != nil
+	return profit, trades, quantity > 1e-10
 }
 
 func (s *SignalEvents) Profit() float64      { profit, _, _ := s.summary(); return profit }

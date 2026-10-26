@@ -23,6 +23,8 @@ type ConfigList struct {
 	DataLimit        int
 	StopLimitPercent float64
 	NumRanking       int
+	PaperBalance     float64
+	FeeRate          float64
 }
 
 var Config ConfigList
@@ -76,6 +78,14 @@ func Load(filename string) (ConfigList, error) {
 	settings.NumRanking, err = strconv.Atoi(section.Key("num_ranking").MustString("3"))
 	if err != nil || settings.NumRanking < 1 || settings.NumRanking > 5 {
 		return ConfigList{}, fmt.Errorf("num_ranking must be between 1 and 5")
+	}
+	settings.PaperBalance, err = strconv.ParseFloat(section.Key("paper_balance").MustString("1000000"), 64)
+	if err != nil || !(settings.PaperBalance > 0 && settings.PaperBalance <= 1e15) {
+		return ConfigList{}, fmt.Errorf("paper_balance must be greater than zero and at most 1e15")
+	}
+	settings.FeeRate, err = strconv.ParseFloat(section.Key("fee_rate").MustString("0.0012"), 64)
+	if err != nil || !(settings.FeeRate >= 0 && settings.FeeRate <= .1) {
+		return ConfigList{}, fmt.Errorf("fee_rate must be between 0 and 0.1")
 	}
 	return settings, nil
 }

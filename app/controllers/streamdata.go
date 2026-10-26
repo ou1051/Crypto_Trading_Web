@@ -16,10 +16,24 @@ type tickerSource interface {
 
 func StreamIngestionData(ctx context.Context) error {
 	apiClient := bitflyer.New(config.Config.ApiKey, config.Config.ApiSecret)
-	return ingestStream(ctx, apiClient, config.Config)
+	ai, err := NewAI(config.Config, apiClient)
+	if err != nil {
+		return fmt.Errorf("initialize automation: %w", err)
+	}
+	activeAI.Store(ai)
+	ctx, cancel := context.WithCancel(ctx)
+	bars := make(chan bitflyer.Ticker, 1)
+	done := make(chan struct{})
+	go func() { defer close(done); ai.Run(ctx, bars) }()
+	defer func() { cancel(); <-done }()
+	return ingestStreamWithBars(ctx, apiClient, config.Config, bars)
 }
 
 func ingestStream(ctx context.Context, source tickerSource, settings config.ConfigList) (err error) {
+	return ingestStreamWithBars(ctx, source, settings, nil)
+}
+
+func ingestStreamWithBars(ctx context.Context, source tickerSource, settings config.ConfigList, bars chan bitflyer.Ticker) (err error) {
 	ctx, cancel := context.WithCancel(ctx)
 	tickers := make(chan bitflyer.Ticker)
 	done := make(chan error, 1)
@@ -57,9 +71,26 @@ func ingestStream(ctx context.Context, source tickerSource, settings config.Conf
 				// changes as an estimate; never repeatedly add the entire 24h total.
 				volume = math.Max(0, ticker.VolumeByProduct-previous.VolumeByProduct)
 			}
+			newTradeBar := false
 			for _, duration := range settings.Durations {
-				if _, err := models.CreateCandleWithDuration(ticker, settings.ProductCode, duration, volume); err != nil {
+				created, err := models.CreateCandleWithDuration(ticker, settings.ProductCode, duration, volume)
+				if err != nil {
 					return fmt.Errorf("save %s candle: %w", duration, err)
+				}
+				if duration == settings.TradeDuration && created {
+					newTradeBar = true
+				}
+			}
+			if newTradeBar && bars != nil {
+				// Slow HTTP order checks must not stop candle ingestion. Only the
+				// newest unprocessed bar is useful; old signals must not be replayed.
+				select {
+				case <-bars:
+				default:
+				}
+				select {
+				case bars <- ticker:
+				default:
 				}
 			}
 			previous = &ticker

@@ -55,6 +55,10 @@ func (api *APIClient) header(method, endpoint string, body []byte) map[string]st
 }
 
 func (api *APIClient) doRequest(method, urlPath string, query map[string]string, requestBody []byte) (responseBody []byte, err error) {
+	return api.doRequestContext(context.Background(), method, urlPath, query, requestBody)
+}
+
+func (api *APIClient) doRequestContext(ctx context.Context, method, urlPath string, query map[string]string, requestBody []byte) (responseBody []byte, err error) {
 	baseURL, err := url.Parse(baseURL)
 	if err != nil {
 		return nil, err
@@ -65,7 +69,7 @@ func (api *APIClient) doRequest(method, urlPath string, query map[string]string,
 	}
 	endpoint := baseURL.ResolveReference(apiURL).String()
 	log.Printf("action=doRequest endpoint=%s", endpoint)
-	request, err := http.NewRequest(method, endpoint, bytes.NewBuffer(requestBody))
+	request, err := http.NewRequestWithContext(ctx, method, endpoint, bytes.NewBuffer(requestBody))
 	if err != nil {
 		return nil, err
 	}
@@ -103,8 +107,12 @@ type Balance struct {
 }
 
 func (api *APIClient) GetBalance() ([]Balance, error) {
+	return api.GetBalanceContext(context.Background())
+}
+
+func (api *APIClient) GetBalanceContext(ctx context.Context) ([]Balance, error) {
 	urlPath := "/v1/me/getbalance"
-	responseBody, err := api.doRequest("GET", urlPath, map[string]string{}, nil)
+	responseBody, err := api.doRequestContext(ctx, "GET", urlPath, map[string]string{}, nil)
 	log.Printf("action=GetBalance response=%s", string(responseBody))
 	if err != nil {
 		log.Printf("action=GetBalance err=%s", err.Error())
@@ -157,7 +165,11 @@ func (t *Ticker) TruncateDateTime(duration time.Duration) time.Time {
 }
 
 func (api *APIClient) GetTicker(productCode string) (*Ticker, error) {
-	responseBody, err := api.doRequest(http.MethodGet, "/v1/getticker", map[string]string{"product_code": productCode}, nil)
+	return api.GetTickerContext(context.Background(), productCode)
+}
+
+func (api *APIClient) GetTickerContext(ctx context.Context, productCode string) (*Ticker, error) {
+	responseBody, err := api.doRequestContext(ctx, http.MethodGet, "/v1/getticker", map[string]string{"product_code": productCode}, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -296,6 +308,10 @@ type ResponseSendChildOrder struct {
 }
 
 func (api *APIClient) SendOrder(order *Order) (*ResponseSendChildOrder, error) {
+	return api.SendOrderContext(context.Background(), order)
+}
+
+func (api *APIClient) SendOrderContext(ctx context.Context, order *Order) (*ResponseSendChildOrder, error) {
 	if order == nil {
 		return nil, fmt.Errorf("bitflyer: order is required")
 	}
@@ -313,7 +329,7 @@ func (api *APIClient) SendOrder(order *Order) (*ResponseSendChildOrder, error) {
 	if err != nil {
 		return nil, err
 	}
-	responseBody, err := api.doRequest(http.MethodPost, "/v1/me/sendchildorder", nil, data)
+	responseBody, err := api.doRequestContext(ctx, http.MethodPost, "/v1/me/sendchildorder", nil, data)
 	if err != nil {
 		return nil, err
 	}
@@ -325,7 +341,11 @@ func (api *APIClient) SendOrder(order *Order) (*ResponseSendChildOrder, error) {
 }
 
 func (api *APIClient) ListOrder(query map[string]string) ([]Order, error) {
-	responseBody, err := api.doRequest(http.MethodGet, "/v1/me/getchildorders", query, nil)
+	return api.ListOrderContext(context.Background(), query)
+}
+
+func (api *APIClient) ListOrderContext(ctx context.Context, query map[string]string) ([]Order, error) {
+	responseBody, err := api.doRequestContext(ctx, http.MethodGet, "/v1/me/getchildorders", query, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -334,4 +354,19 @@ func (api *APIClient) ListOrder(query map[string]string) ([]Order, error) {
 		return nil, err
 	}
 	return orders, nil
+}
+
+func (api *APIClient) CancelOrderContext(ctx context.Context, productCode, acceptanceID string) error {
+	if productCode == "" || acceptanceID == "" {
+		return fmt.Errorf("bitflyer: product and order ID are required")
+	}
+	data, err := json.Marshal(struct {
+		ProductCode  string `json:"product_code"`
+		AcceptanceID string `json:"child_order_acceptance_id"`
+	}{productCode, acceptanceID})
+	if err != nil {
+		return err
+	}
+	_, err = api.doRequestContext(ctx, http.MethodPost, "/v1/me/cancelchildorder", nil, data)
+	return err
 }

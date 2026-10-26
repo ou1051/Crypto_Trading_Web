@@ -52,6 +52,7 @@ type DataFrameCandle struct {
 	Events        *SignalEvents       `json:"events,omitempty"`
 	Backtest      *BacktestResult     `json:"backtest,omitempty"`
 	Optimization  *OptimizationResult `json:"optimization,omitempty"`
+	Automation    *AutomationStatus   `json:"automation,omitempty"`
 }
 
 type Sma struct {

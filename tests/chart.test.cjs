@@ -345,3 +345,32 @@ test('optimization runs only once and its parameters can be applied from the ran
     assert.equal(params.get('emaPeriod1'),'5');
     assert.equal(params.get('emaPeriod2'),'12');
 });
+
+test('automation status distinguishes paper trades from live orders and shows halted state', async () => {
+    const app = application();
+    const automation = {mode:'paper',duration:60000000000,cash:1000000,quantity:.01,realized_profit:1234,stop_limit:9000000,fee_rate:.0012,params:{ema_enable:true},halted:false,last_error:''};
+    await app.respond(0,candles(),200,{automation});
+    assert.match(app.elements.automation_status.textContent,/ペーパートレード.*60秒足.*稼働中/);
+    assert.match(app.elements.automation_position.textContent,/0\.01000000 BTC.*1,234 JPY.*仮想残高/);
+    assert.match(app.elements.automation_strategy.textContent,/EMA.*0\.120%/);
+    await app.tick();
+    await app.respond(app.requests.length-1,candles(),200,{automation:{...automation,mode:'live',halted:true,pending:{acceptance_id:'JRF-owned'},last_error:'Order outcome unknown'}});
+    assert.match(app.elements.automation_status.textContent,/実取引.*停止中.*Order outcome unknown/);
+    assert.equal(app.elements.automation_status.dataset.error,'true');
+    assert.doesNotMatch(app.elements.automation_position.textContent,/仮想残高/);
+});
+
+test('automatic trade markers use execution prices and group multiple fills in the displayed candle', async () => {
+    const app = application();
+    app.showEvents('auto');
+    assert.equal(new URL(app.requests.at(-1).url,'http://localhost').searchParams.get('strategy'),'auto');
+    const signals = [{time:new Date(start+1000).toISOString(),side:'BUY',size:.01,price:102,execution_price:100},
+        {time:new Date(start+30000).toISOString(),side:'SELL',size:.01,price:108,execution_price:110}];
+    await app.respond(app.requests.length-1,candles(),200,{events:{signals,profit:.06,completed_trades:1,holding:false},backtest:{strategy:'auto',available:true}});
+    const row=app.draws.at(-1).rows[0];
+    assert.equal(row.at(-3),110);
+    assert.equal(row.at(-2),'BUY/SELL');
+    assert.equal(row.at(-1),'BUY 0.01 BTC @ 100\nSELL 0.01 BTC @ 110');
+    assert.match(app.elements.backtest_profit.textContent,/自動売買の記録.*売却約定/);
+    assert.equal(signals.length,2);
+});
