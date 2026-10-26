@@ -6,6 +6,7 @@ const vm = require('node:vm');
 
 const source = fs.readFileSync(path.join(__dirname, '../app/views/static/chart.js'), 'utf8');
 const indicatorSource = fs.readFileSync(path.join(__dirname, '../app/views/static/indicators.js'), 'utf8');
+const backtestSource = fs.readFileSync(path.join(__dirname, '../app/views/static/backtest.js'), 'utf8');
 const flush = () => new Promise(resolve => setImmediate(resolve));
 
 class Element {
@@ -15,6 +16,9 @@ class Element {
         this.attributes = {};
         this.hidden = false;
         this.textContent = '';
+        this.value = '';
+        this.checked = false;
+        this.children = [];
     }
     addEventListener(type, handler) {
         if (!this.listeners.has(type)) this.listeners.set(type, []);
@@ -25,6 +29,8 @@ class Element {
     }
     setAttribute(name, value) { this.attributes[name] = value; }
     contains(target) { return target === this; }
+    append(...children) { this.children.push(...children); }
+    replaceChildren(...children) { this.children = [...children]; }
 }
 
 function application({withGoogle = true, respectAbort = false} = {}) {
@@ -54,6 +60,9 @@ function application({withGoogle = true, respectAbort = false} = {}) {
     };
     const elements = {chart_app: root, chart_status: status, dashboard_div: container, technical_form: form};
     document.getElementById = id => elements[id] ||= new Element();
+    document.createElement = () => new Element();
+    document.getElementById('rsi_buy').value = '30';
+    document.getElementById('rsi_sell').value = '70';
     document.hidden = false;
     const window = new Element();
     const requests = [];
@@ -111,11 +120,18 @@ function application({withGoogle = true, respectAbort = false} = {}) {
             }
         }
     };
-    vm.runInNewContext(indicatorSource + '\n' + source, sandbox);
+    vm.runInNewContext(indicatorSource + '\n' + backtestSource + '\n' + source, sandbox);
     return {
         root, status, container, document, window, requests, timers, draws, observed,
         change(duration) { buttons.find(button => button.dataset.duration === duration).emit('click'); },
         buttons,
+        elements,
+        showEvents(strategy='ema') {
+            document.getElementById('backtest_strategy').value = strategy;
+            document.getElementById('inputEvents').checked = true;
+            document.getElementById('inputEvents').emit('change');
+        },
+        optimize() { document.getElementById('optimize_button').emit('click'); },
         enable(name, checked=true) { toggles.find(input => input.dataset.indicator === name).checked = checked; form.emit('change'); },
         parameter(name, value) { inputs.find(input => input.name === name).value = String(value); form.emit('change'); },
         async respond(index, candles, statusCode = 200, extra = {}) {
@@ -290,4 +306,42 @@ test('all indicators build linked charts, retain null warmups and project Ichimo
     delete extra.rsi;
     await app.respond(app.requests.length-1,candles(n),200,extra);
     assert.equal(app.observed.charts.length,3,'disabled subcharts must be removed');
+});
+
+test('backtest settings request the chosen strategy and render event markers without mutating signals', async () => {
+    const app = application();
+    app.showEvents('rsi');
+    const params = new URL(app.requests.at(-1).url,'http://localhost').searchParams;
+    assert.equal(params.get('events'),'true');
+    assert.equal(params.get('strategy'),'rsi');
+    assert.equal(params.get('rsiPeriod'),'14');
+    assert.equal(params.get('rsiBuy'),'30');
+    const signals = [{time:new Date(start-minute).toISOString(),side:'BUY',price:50,size:1},{time:new Date(start+minute).toISOString(),side:'SELL',price:105,size:1}];
+    const events = {signals,profit:55,completed_trades:1,holding:false};
+    await app.respond(app.requests.length-1,candles(3),200,{events,backtest:{strategy:'rsi',available:true}});
+    assert.equal(signals.length,2,'rendering must not consume the event list');
+    const rows = app.draws.at(-1).rows;
+    assert.equal(rows[1].at(-3),105);
+    assert.equal(rows[1].at(-2),'SELL');
+    assert.equal(rows[0].at(-2),null,'an event outside the visible window must not block later markers');
+    assert.match(app.elements.backtest_profit.textContent,/55 JPY/);
+});
+
+test('optimization runs only once and its parameters can be applied from the ranking', async () => {
+    const app = application();
+    app.optimize();
+    assert.equal(new URL(app.requests.at(-1).url,'http://localhost').searchParams.get('optimize'),'true');
+    const events = {signals:[],profit:0,completed_trades:0,holding:false};
+    const optimization = {as_of:new Date(start).toISOString(),candle_count:100,rankings:[{strategy:'ema',available:true,performance:10,completed_trades:2,parameters:{emaPeriod1:5,emaPeriod2:12},enable:true}]};
+    await app.respond(app.requests.length-1,candles(),200,{events,backtest:{strategy:'ema',available:true},optimization});
+    assert.equal(app.elements.ranking_rows.children.length,1);
+    assert.match(app.elements.backtest_profit.textContent,/0 JPY/,'zero profit must be visible');
+    await app.tick();
+    assert.equal(new URL(app.requests.at(-1).url,'http://localhost').searchParams.has('optimize'),false,'periodic polling must not repeat optimization');
+    const apply = app.elements.ranking_rows.children[0].children[5].children[0];
+    apply.emit('click');
+    const params = new URL(app.requests.at(-1).url,'http://localhost').searchParams;
+    assert.equal(params.get('strategy'),'ema');
+    assert.equal(params.get('emaPeriod1'),'5');
+    assert.equal(params.get('emaPeriod2'),'12');
 });

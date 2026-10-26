@@ -7,6 +7,7 @@
     const buttons = [...app.querySelectorAll('button[data-duration]')];
     const technicalForm = document.getElementById('technical_form');
     const indicators = window.CandleIndicators;
+    const backtests = window.CandleBacktests;
     const refreshInterval = 3000;
     const requestTimeout = 15000;
     let duration = app.dataset.duration;
@@ -25,6 +26,7 @@
     let timer;
     let controller;
     let requestID = 0;
+    let optimizationRequested = false;
 
     function message(text, error = false) {
         status.textContent = text;
@@ -36,6 +38,7 @@
         requestID++;
         if (controller) controller.abort();
         controller = null;
+        backtests.busy(false);
     }
 
     function paused() {
@@ -80,8 +83,10 @@
         if (stopped || paused()) return;
         cancelRequest();
         let selected;
+        let eventParameters;
         try {
             selected = indicators.settings(technicalForm);
+            eventParameters = backtests.parameters();
         } catch (error) {
             message(error.message, true);
             return;
@@ -94,12 +99,16 @@
             product_code: app.dataset.productCode, duration, limit: app.dataset.limit
         });
         for (const [name, value] of selected.params) params.set(name, value);
+        for (const [name, value] of eventParameters) params.set(name, value);
+        if (optimizationRequested) params.set('optimize', 'true');
+        backtests.busy(optimizationRequested);
         try {
             const response = await fetch(`/api/candle/?${params}`, {signal: current.signal, cache: 'no-store'});
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const data = await response.json();
             if (id !== requestID || stopped) return;
             if (!Array.isArray(data.candles)) throw new Error('invalid candle response');
+            backtests.render(data);
             const layout = indicators.layout(data, selected, duration);
             dataTable = layout.table;
             if (dataTable.getNumberOfRows() === 0) {
@@ -120,6 +129,8 @@
             clearTimeout(timeout);
             if (id === requestID) {
                 controller = null;
+                optimizationRequested = false;
+                backtests.busy(false);
                 schedule();
             }
         }
@@ -138,6 +149,8 @@
         button.addEventListener('click', () => {
             if (button.dataset.duration === duration) return;
             duration = button.dataset.duration;
+            optimizationRequested = false;
+            backtests.reset();
             cancelRequest();
             dataTable = null;
             bounds = null;
@@ -149,6 +162,7 @@
         });
     }
     function settingsChanged() {
+        optimizationRequested = false;
         for (const toggle of technicalForm.querySelectorAll('input[data-indicator]')) {
             for (const input of technicalForm.querySelectorAll(`input[data-for="${toggle.dataset.indicator}"]`)) input.disabled = !toggle.checked;
         }
@@ -158,6 +172,10 @@
     }
     technicalForm.addEventListener('change', settingsChanged);
     technicalForm.addEventListener('submit', event => { event.preventDefault(); settingsChanged(); });
+    backtests.initialize(settingsChanged, () => {
+        optimizationRequested = true;
+        if (chartsLoaded) refresh();
+    });
     container.addEventListener('mouseenter', () => { hovering = true; interactionChanged(); });
     container.addEventListener('mouseleave', () => { hovering = false; interactionChanged(); });
     container.addEventListener('focusin', () => { focused = true; interactionChanged(); });

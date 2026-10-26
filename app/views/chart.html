@@ -24,15 +24,25 @@
         .technical-panel { border-top: 1px solid #d3dbe2; }
         .technical-panel h2 { margin: 12px 0 0; font-size: 15px; }
         .technical-chart { height: 170px; }
+        .backtest-controls { margin: 16px 0; padding: 12px; border: 1px solid #d3dbe2; border-radius: 4px; }
+        .backtest-controls select { padding: 7px; max-width: 100%; }
+        .backtest-controls input[type="number"] { width: 64px; }
+        #ranking_section { margin: 16px 0; }
+        .table-scroll { max-width: 100%; overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th, td { padding: 8px; border-bottom: 1px solid #d3dbe2; text-align: left; }
+        th { white-space: nowrap; }
+        #backtest_profit { font-weight: 600; }
         .note { color: #596673; }
         #chart_status[data-error="true"] { color: #a52714; }
     </style>
     <script src="https://www.gstatic.com/charts/loader.js"></script>
     <script src="/static/indicators.js" defer></script>
+    <script src="/static/backtest.js" defer></script>
     <script src="/static/chart.js" defer></script>
 </head>
 <body>
-    <main id="chart_app" data-product-code="{{.ProductCode}}" data-duration="{{.Duration}}" data-limit="{{.Limit}}">
+    <main id="chart_app" data-product-code="{{.ProductCode}}" data-duration="{{.Duration}}" data-limit="{{.Limit}}" data-default-strategy="{{.DefaultStrategy}}">
         <h1>{{.ProductCode}} ローソク足チャート</h1>
         <div class="toolbar" role="group" aria-label="時間足の切り替え">
             <button type="button" data-duration="1s" aria-pressed="{{eq .Duration "1s"}}">秒足（1s）</button>
@@ -93,6 +103,39 @@
                 </div>
             </fieldset>
         </form>
+        <section class="backtest-controls" aria-label="売買イベントとバックテスト">
+            <div class="toolbar">
+                <label><input id="inputEvents" type="checkbox"> 売買イベントを表示</label>
+                <label>戦略
+                    <select id="backtest_strategy">
+                        <option value="ema">EMAクロス</option>
+                        <option value="bbands">ボリンジャーバンド</option>
+                        <option value="ichimoku">一目均衡表</option>
+                        <option value="macd">MACD</option>
+                        <option value="rsi">RSI</option>
+                        <option value="saved">保存済みイベント</option>
+                    </select>
+                </label>
+                <button type="button" id="optimize_button">戦略を比較・最適化</button>
+            </div>
+            <p class="parameters">
+                <span>RSIの売買しきい値：</span>
+                <label>買い <input type="number" id="rsi_buy" value="30" min="1" max="99" required></label>
+                <label>売り <input type="number" id="rsi_sell" value="70" min="1" max="99" required></label>
+            </p>
+            <p class="note">戦略の期間・倍率は上の指標設定を使います。バックテストは1 BTC・次足始値で仮想約定し、手数料・スリッページは未反映です。確定損益には未決済分を含めません。</p>
+            <p id="backtest_profit" role="status" hidden></p>
+        </section>
+        <section id="ranking_section" hidden>
+            <h2>戦略比較・最適化結果</h2>
+            <p id="ranking_caption" class="note"></p>
+            <div class="table-scroll">
+                <table>
+                    <thead><tr><th>戦略</th><th>確定損益</th><th>完了取引数</th><th>最適パラメータ</th><th>採用</th><th>表示</th></tr></thead>
+                    <tbody id="ranking_rows"></tbody>
+                </table>
+            </div>
+        </section>
         <p class="note">指標は必要な本数がそろうと表示します。期間は選択中の時間足の本数です。HVは1本ごとの変動率（%）です。</p>
         <p class="note">3秒ごとに自動更新します。チャートの操作中は更新を一時停止します。</p>
         <p id="chart_status" role="status" aria-live="polite">ローソク足データを読み込んでいます。</p>

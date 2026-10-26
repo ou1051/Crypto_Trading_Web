@@ -74,7 +74,11 @@ func viewChartHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	productCode, duration, limit, err := candleParameters(r, false, "1m", 365)
+	defaultLimit := config.Config.DataLimit
+	if defaultLimit == 0 {
+		defaultLimit = 365
+	}
+	productCode, duration, limit, err := candleParameters(r, false, "1m", defaultLimit)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -87,10 +91,14 @@ func viewChartHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	page := struct {
-		ProductCode string
-		Duration    string
-		Limit       int
-	}{ProductCode: productCode, Duration: durationName, Limit: limit}
+		ProductCode     string
+		Duration        string
+		Limit           int
+		DefaultStrategy string
+	}{ProductCode: productCode, Duration: durationName, Limit: limit, DefaultStrategy: "saved"}
+	if config.Config.BackTest {
+		page.DefaultStrategy = "ema"
+	}
 	var body bytes.Buffer
 	if err := templates.ExecuteTemplate(&body, "chart.html", page); err != nil {
 		log.Printf("action=viewChart render_err=%s", err)
@@ -130,6 +138,11 @@ func apiCandleHandler(w http.ResponseWriter, r *http.Request) {
 		APIError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	backtest, err := parseBacktest(r.URL.Query())
+	if err != nil {
+		APIError(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 	df, err := models.GetAllCandle(productCode, duration, limit)
 	if err != nil {
 		log.Printf("action=apiCandle err=%s", err)
@@ -138,6 +151,11 @@ func apiCandleHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	for _, add := range indicators {
 		add(df)
+	}
+	if err := backtest.apply(df); err != nil {
+		log.Printf("action=apiCandle events_err=%s", err)
+		APIError(w, "failed to load signal events", http.StatusInternalServerError)
+		return
 	}
 	body, err := json.Marshal(df)
 	if err != nil {

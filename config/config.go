@@ -9,15 +9,20 @@ import (
 )
 
 type ConfigList struct {
-	ApiKey        string
-	ApiSecret     string
-	LogFile       string
-	ProductCode   string
-	TradeDuration time.Duration
-	Durations     map[string]time.Duration
-	DbName        string
-	SQLDriver     string
-	Port          int
+	ApiKey           string
+	ApiSecret        string
+	LogFile          string
+	ProductCode      string
+	TradeDuration    time.Duration
+	Durations        map[string]time.Duration
+	DbName           string
+	SQLDriver        string
+	Port             int
+	BackTest         bool
+	UsePercent       float64
+	DataLimit        int
+	StopLimitPercent float64
+	NumRanking       int
 }
 
 var Config ConfigList
@@ -50,6 +55,27 @@ func Load(filename string) (ConfigList, error) {
 	}
 	if settings.SQLDriver != "sqlite3" {
 		return ConfigList{}, fmt.Errorf("unsupported database driver %q", settings.SQLDriver)
+	}
+	section := cfg.Section("gotrading")
+	settings.BackTest, err = strconv.ParseBool(section.Key("back_test").MustString("true"))
+	if err != nil {
+		return ConfigList{}, fmt.Errorf("back_test must be true or false")
+	}
+	settings.UsePercent, err = strconv.ParseFloat(section.Key("use_percent").MustString("0.9"), 64)
+	if err != nil || !(settings.UsePercent > 0 && settings.UsePercent <= 1) {
+		return ConfigList{}, fmt.Errorf("use_percent must be greater than 0 and at most 1")
+	}
+	settings.StopLimitPercent, err = strconv.ParseFloat(section.Key("stop_limit_percent").MustString("0.9"), 64)
+	if err != nil || !(settings.StopLimitPercent > 0 && settings.StopLimitPercent <= 1) {
+		return ConfigList{}, fmt.Errorf("stop_limit_percent must be greater than 0 and at most 1")
+	}
+	settings.DataLimit, err = strconv.Atoi(section.Key("data_limit").MustString("365"))
+	if err != nil || settings.DataLimit < 2 || settings.DataLimit > 1000 {
+		return ConfigList{}, fmt.Errorf("data_limit must be between 2 and 1000")
+	}
+	settings.NumRanking, err = strconv.Atoi(section.Key("num_ranking").MustString("3"))
+	if err != nil || settings.NumRanking < 1 || settings.NumRanking > 5 {
+		return ConfigList{}, fmt.Errorf("num_ranking must be between 1 and 5")
 	}
 	return settings, nil
 }

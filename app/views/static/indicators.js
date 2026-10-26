@@ -79,22 +79,38 @@ window.CandleIndicators = (() => {
             return value;
         }
         const rows = [];
+        let markers;
+        const signals = new Map();
+        if (data.events) {
+            for (const event of data.events.signals || []) signals.set(new Date(event.time).getTime(), event);
+            markers = {index: labels.length, annotation: labels.length+1, text: labels.length+2};
+            labels.push('売買イベント','annotation','annotationText');
+            table.addColumn('number','売買イベント');
+            table.addColumn({type:'string',role:'annotation'});
+            table.addColumn({type:'string',role:'annotationText'});
+        }
         for (let i = 0; i < data.candles.length + future; i++) {
             const candle = data.candles[i];
             const date = candle ? new Date(candle.time) : new Date(lastTime + (i - data.candles.length + 1) * step);
             const values = candle ? [candle.low, candle.open, candle.close, candle.high, candle.volume] : [null, null, null, null, null];
             if (!Number.isFinite(date.getTime()) || (candle && !values.every(Number.isFinite))) throw new Error('invalid candle data');
-            rows.push([date, ...values, ...vectors.map(values => nullable(values[i]))]);
+            const row = [date, ...values, ...vectors.map(values => nullable(values[i]))];
+            if (markers) {
+                const event = signals.get(date.getTime());
+                row.push(event ? nullable(event.price) : null, event ? event.side : null, event ? `${event.side} ${event.size} BTC @ ${event.price}` : null);
+            }
+            rows.push(row);
         }
         table.addRows(rows);
         new google.visualization.DateFormat({pattern: 'yyyy-MM-dd HH:mm:ss', timeZone: 0}).format(table, 0);
-        return {table, overlays, panels, signature: JSON.stringify({labels, panels: panels.map(panel => panel.name)})};
+        return {table, overlays, panels, markers, signature: JSON.stringify({labels, panels: panels.map(panel => panel.name)})};
     }
 
     function charts(layout) {
         const dateColumn = {calc: (table, row) => table.getFormattedValue(row, 0), type: 'string'};
         const series = {0: {labelInLegend: 'ローソク足'}};
         layout.overlays.forEach((line, i) => { series[i + 1] = {type: 'line', color: line.color, lineWidth: 1}; });
+        if (layout.markers) series[layout.overlays.length+1] = {type:'line',lineWidth:0,pointSize:3,color:'#25313c',visibleInLegend:false};
         const charts = [new google.visualization.ChartWrapper({
             chartType: 'ComboChart', containerId: 'chart_div',
             options: {
@@ -102,7 +118,7 @@ window.CandleIndicators = (() => {
                 seriesType: 'candlesticks', series, interpolateNulls: false, hAxis: {slantedText: false},
                 candlestick: {fallingColor: {strokeWidth: 0, fill: '#a52714'}, risingColor: {strokeWidth: 0, fill: '#0f9d58'}}
             },
-            view: {columns: [dateColumn, 1, 2, 3, 4, ...layout.overlays.map(line => line.index)]}
+            view: {columns: [dateColumn, 1, 2, 3, 4, ...layout.overlays.map(line => line.index), ...(layout.markers ? [layout.markers.index,layout.markers.annotation,layout.markers.text] : [])]}
         })];
         for (const name of ['volume', 'rsi', 'macd', 'hv']) document.getElementById(`${name}_panel`).hidden = !layout.panels.some(panel => panel.name === name);
         for (const panel of layout.panels) charts.push(new google.visualization.ChartWrapper({

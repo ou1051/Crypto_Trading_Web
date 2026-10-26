@@ -39,16 +39,19 @@ func (values *Series) UnmarshalJSON(data []byte) error {
 }
 
 type DataFrameCandle struct {
-	ProductCode   string         `json:"product_code"`
-	Duration      time.Duration  `json:"duration"`
-	Candles       []Candle       `json:"candles"`
-	Smas          []Sma          `json:"smas,omitempty"`
-	Emas          []Ema          `json:"emas,omitempty"`
-	BBands        *BBands        `json:"bbands,omitempty"`
-	IchimokuCloud *IchimokuCloud `json:"ichimoku,omitempty"`
-	Rsi           *Rsi           `json:"rsi,omitempty"`
-	Macd          *Macd          `json:"macd,omitempty"`
-	Hvs           []Hv           `json:"hvs,omitempty"`
+	ProductCode   string              `json:"product_code"`
+	Duration      time.Duration       `json:"duration"`
+	Candles       []Candle            `json:"candles"`
+	Smas          []Sma               `json:"smas,omitempty"`
+	Emas          []Ema               `json:"emas,omitempty"`
+	BBands        *BBands             `json:"bbands,omitempty"`
+	IchimokuCloud *IchimokuCloud      `json:"ichimoku,omitempty"`
+	Rsi           *Rsi                `json:"rsi,omitempty"`
+	Macd          *Macd               `json:"macd,omitempty"`
+	Hvs           []Hv                `json:"hvs,omitempty"`
+	Events        *SignalEvents       `json:"events,omitempty"`
+	Backtest      *BacktestResult     `json:"backtest,omitempty"`
+	Optimization  *OptimizationResult `json:"optimization,omitempty"`
 }
 
 type Sma struct {
