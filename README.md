@@ -4,7 +4,9 @@ A Go application for collecting Bitcoin market data from bitFlyer, storing candl
 
 The default configuration runs **paper trading with live public market data**. The API credentials remain placeholders, so you can start the dashboard without a bitFlyer account. Live automation and the manual order command can place real orders when configured with valid credentials.
 
-Sections 15 through 20 follow the supplied course code. The section 21 work addresses the supplied lecture topics about short-timeframe trading costs and algorithm/code improvements: cost-aware research, chronological validation, and more resilient data ingestion. The archive ends at lecture 137 and contains no lecture 138/139 source or transcript, so these final improvements are project-specific implementations rather than a verified reproduction of those lectures. The course's AI model selects technical strategies using historical backtests; it is a rule-based model.
+The core trading application is based on an online course. I extended it with cost-aware backtesting, chronological validation, and more resilient data ingestion.
+
+The trading model selects technical strategies using historical backtests; it is a rule-based model.
 
 ## Contents
 
@@ -120,7 +122,7 @@ Setting `back_test = false` with valid credentials makes a normal web-mode start
 
 ## Dashboard
 
-The current interface uses Japanese labels. It provides:
+The interface is in English and uses a simple, left-aligned layout with a 600px chart, native buttons and checkboxes, and compact rows of indicator inputs. The chart fits smaller screens, with a scrollable optimization table. It provides:
 
 - One-second, one-minute, and one-hour candles with a shared time-range filter.
 - SMA, EMA, Bollinger Bands, Ichimoku Cloud, estimated volume, RSI, MACD, and historical volatility.
@@ -148,7 +150,7 @@ Historical backtests and forward automation share the strategy decision rules, b
 
 Realized profit excludes unrealized gains or losses on open positions. Historical backtests include configured costs but do not use the automation engine's stop rule. They do not force a closing trade at the end of a window. API and dashboard research use these configured costs; cost-free Go model helpers remain available as gross-performance baselines. Historical results and validation rankings are not forecasts of future returns.
 
-### Section 21: costs on short timeframes
+### Trading costs on short timeframes
 
 Small price moves can be consumed by costs on both entry and exit. More frequent trading repeats those costs more often; changing to a one-minute timeframe does not reduce the cost of a round trip. Under the supplied assumptions, a flat midpoint produces a loss, and the midpoint must rise by about **0.391%** for one modeled buy/sell round trip to break even. This is a model calculation, not an exchange fee quote or a profit target.
 

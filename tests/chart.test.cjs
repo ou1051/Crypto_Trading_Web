@@ -199,7 +199,7 @@ test('empty data and HTTP failures recover on the next poll without reloading th
     const app = application();
     await app.respond(0, []);
     assert.equal(app.container.hidden, true);
-    assert.match(app.status.textContent, /データを収集中/);
+    assert.match(app.status.textContent, /Waiting for market data/);
     await app.tick();
     await app.respond(1, [], 500);
     assert.equal(app.status.dataset.error, 'true');
@@ -280,7 +280,7 @@ test('indicator controls send selected periods and refuse invalid settings', asy
     const before = app.requests.length;
     app.parameter('macdPeriod1', 30);
     assert.equal(app.requests.length, before);
-    assert.match(app.status.textContent, /短期期間/);
+    assert.match(app.status.textContent, /fast period/);
 });
 
 test('all indicators build linked charts, retain null warmups and project Ichimoku 26 bars', async () => {
@@ -350,14 +350,14 @@ test('automation status distinguishes paper trades from live orders and shows ha
     const app = application();
     const automation = {mode:'paper',duration:60000000000,cash:1000000,quantity:.01,realized_profit:1234,stop_limit:9000000,fee_rate:.0012,params:{ema_enable:true},halted:false,last_error:''};
     await app.respond(0,candles(),200,{automation});
-    assert.match(app.elements.automation_status.textContent,/ペーパートレード.*60秒足.*稼働中/);
-    assert.match(app.elements.automation_position.textContent,/0\.01000000 BTC.*1,234 JPY.*仮想残高/);
+    assert.match(app.elements.automation_status.textContent,/Paper trading.*1m.*Running/);
+    assert.match(app.elements.automation_position.textContent,/0\.01000000 BTC.*1,234 JPY.*Paper cash/);
     assert.match(app.elements.automation_strategy.textContent,/EMA.*0\.120%/);
     await app.tick();
     await app.respond(app.requests.length-1,candles(),200,{automation:{...automation,mode:'live',halted:true,pending:{acceptance_id:'JRF-owned'},last_error:'Order outcome unknown'}});
-    assert.match(app.elements.automation_status.textContent,/実取引.*停止中.*Order outcome unknown/);
+    assert.match(app.elements.automation_status.textContent,/Live trading.*Stopped.*Order outcome unknown/);
     assert.equal(app.elements.automation_status.dataset.error,'true');
-    assert.doesNotMatch(app.elements.automation_position.textContent,/仮想残高/);
+    assert.doesNotMatch(app.elements.automation_position.textContent,/Paper cash/);
 });
 
 test('automatic trade markers use execution prices and group multiple fills in the displayed candle', async () => {
@@ -371,7 +371,7 @@ test('automatic trade markers use execution prices and group multiple fills in t
     assert.equal(row.at(-3),110);
     assert.equal(row.at(-2),'BUY/SELL');
     assert.equal(row.at(-1),'BUY 0.01 BTC @ 100\nSELL 0.01 BTC @ 110');
-    assert.match(app.elements.backtest_profit.textContent,/自動売買の記録.*売却約定/);
+    assert.match(app.elements.backtest_profit.textContent,/Auto trades.*Sell fills/);
     assert.equal(signals.length,2);
 });
 
@@ -382,13 +382,13 @@ test('research results show net costs, holdout counts, and the minimum trade req
     const optimization={as_of:new Date(start).toISOString(),candle_count:100,training_count:70,validation_count:30,break_even_rise:.0039,
         policy:{costs,min_validation_trades:2},rankings:[{strategy:'ema',available:true,enable:false,performance:-1,training_profit:5,gross_performance:10,completed_trades:1,parameters:{emaPeriod1:5,emaPeriod2:12}}]};
     await app.respond(app.requests.length-1,candles(),200,{events:{signals:[],profit:-1,completed_trades:1},backtest:{strategy:'ema',costs,gross_profit:10},optimization});
-    assert.match(app.elements.ranking_caption.textContent,/調整 70本・検証 30本/);
-    assert.match(app.elements.ranking_caption.textContent,/2回以上/);
+    assert.match(app.elements.ranking_caption.textContent,/Training: 70 bars; validation: 30 bars/);
+    assert.match(app.elements.ranking_caption.textContent,/at least 2 validation trades/);
     assert.match(app.elements.ranking_caption.textContent,/0\.390%/);
     const cells=app.elements.ranking_rows.children[0].children;
     assert.match(cells[1].textContent,/5 JPY/);
     assert.match(cells[2].textContent,/10 JPY/);
     assert.match(cells[3].textContent,/-1 JPY/);
-    assert.equal(cells[6].textContent,'見送り');
-    assert.match(app.elements.backtest_profit.textContent,/コスト前 10 JPY/);
+    assert.equal(cells[6].textContent,'No');
+    assert.match(app.elements.backtest_profit.textContent,/Gross 10 JPY/);
 });

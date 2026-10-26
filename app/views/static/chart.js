@@ -114,16 +114,16 @@
             if (dataTable.getNumberOfRows() === 0) {
                 container.hidden = true;
                 selectedRange = null;
-                message('データを収集中です。データが届くと自動で表示します。');
+                message('Waiting for market data.');
             } else {
                 container.hidden = false;
                 if (layoutSignature !== layout.signature) rebuildDashboard(layout);
                 draw();
-                message(`${data.candles.length}本のローソク足を表示しています。`);
+                message(`${data.candles.length} candles.`);
             }
         } catch (error) {
             if (id === requestID && !stopped) {
-                message('データの取得に失敗しました。3秒後に再試行します。', true);
+                message('Could not load candles. Retrying in 3 seconds.', true);
             }
         } finally {
             clearTimeout(timeout);
@@ -139,7 +139,7 @@
     function interactionChanged() {
         if (paused()) {
             cancelRequest();
-            message('チャートの操作中は自動更新を一時停止しています。');
+            message('Refresh paused while using the chart.');
         } else if (chartsLoaded && !stopped) {
             refresh();
         }
@@ -157,7 +157,7 @@
             selectedRange = null;
             container.hidden = true;
             for (const item of buttons) item.setAttribute('aria-pressed', String(item.dataset.duration === duration));
-            message('ローソク足データを読み込んでいます。');
+            message('Loading candles...');
             if (chartsLoaded) refresh();
         });
     }
@@ -167,7 +167,7 @@
             for (const input of technicalForm.querySelectorAll(`input[data-for="${toggle.dataset.indicator}"]`)) input.disabled = !toggle.checked;
         }
         cancelRequest();
-        message('指標を更新しています。');
+        message('Updating indicators...');
         if (chartsLoaded) refresh();
     }
     technicalForm.addEventListener('change', settingsChanged);
@@ -198,10 +198,10 @@
     });
 
     if (typeof google === 'undefined') {
-        message('チャートを読み込めませんでした。インターネット接続を確認して再読み込みしてください。', true);
+        message('Could not load Google Charts. Check your connection and reload.', true);
         return;
     }
-    google.charts.load('current', {packages: ['corechart', 'controls'], language: 'ja'});
+    google.charts.load('current', {packages: ['corechart', 'controls'], language: 'en'});
     function rebuildDashboard(layout) {
         for (const wrapper of [...charts, dashboard, rangeControl].filter(Boolean)) {
             google.visualization.events.removeAllListeners(wrapper);
@@ -213,14 +213,14 @@
             controlType: 'ChartRangeFilter', containerId: 'filter_div',
             options: {
                 filterColumnIndex: 0,
-                ui: {chartType: 'LineChart', chartView: {columns: [0, 3]}, chartOptions: {height: 90, hAxis: {textPosition: 'none'}}}
+                ui: {chartType: 'LineChart', chartView: {columns: [0, 3]}, chartOptions: {height: 50, hAxis: {textPosition: 'none'}}}
             }
         });
         google.visualization.events.addListener(rangeControl, 'statechange', rememberRange);
         google.visualization.events.addListener(dashboard, 'ready', () => { drawing = false; });
         google.visualization.events.addListener(dashboard, 'error', () => {
             drawing = false;
-            message('チャートを描画できませんでした。次の更新で再試行します。', true);
+            message('Could not draw the chart. Retrying on the next update.', true);
         });
         dashboard.bind(rangeControl, charts);
         layoutSignature = layout.signature;

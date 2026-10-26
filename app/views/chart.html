@@ -1,43 +1,23 @@
-<!doctype html>
-<html lang="ja">
+<!DOCTYPE html>
+<html lang="en">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{{.ProductCode}} ローソク足チャート</title>
+    <title>{{.ProductCode}} Chart</title>
     <style>
-        body { margin: 32px auto; padding: 0 20px; max-width: 1100px; font-family: sans-serif; color: #25313c; }
-        h1 { font-size: 24px; }
-        .toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-        button { padding: 8px 16px; border: 1px solid #a6b2bd; border-radius: 4px; background: white; color: inherit; cursor: pointer; }
-        button[aria-pressed="true"] { background: #25313c; color: white; }
-        button:focus-visible { outline: 3px solid #4285f4; outline-offset: 3px; }
-        #dashboard_div { width: 100%; min-width: 0; }
-        #chart_div { height: 440px; }
-        #filter_div { height: 90px; }
-        #technical_form { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 10px; margin-top: 16px; }
-        fieldset { min-width: 0; margin: 0; padding: 10px; border: 1px solid #d3dbe2; border-radius: 4px; }
-        fieldset legend { padding: 0 4px; }
-        fieldset label { font-size: 13px; }
-        input[type="number"] { width: 64px; box-sizing: border-box; padding: 5px; }
-        input:invalid { border-color: #a52714; }
-        .parameters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-        .technical-panel { border-top: 1px solid #d3dbe2; }
-        .technical-panel h2 { margin: 12px 0 0; font-size: 15px; }
+        #chart_app { width: 600px; max-width: 100%; }
+        #dashboard_div { border: 1px solid #ccc; }
+        #chart_div { height: 400px; border-bottom: 1px solid #ccc; }
+        #filter_div { height: 50px; }
+        input[type="number"] { width: 50px; }
+        button[aria-pressed="true"] { font-weight: bold; }
+        .technical_title { margin: 10px; color: gray; }
+        .bottom_chart { border-bottom: 1px solid #ccc; }
         .technical-chart { height: 170px; }
-        .backtest-controls { margin: 16px 0; padding: 12px; border: 1px solid #d3dbe2; border-radius: 4px; }
-        .backtest-controls select { padding: 7px; max-width: 100%; }
-        .automation-status { padding: 12px; margin-top: 16px; border: 1px solid #d3dbe2; border-radius: 4px; }
-        .automation-status h2 { font-size: 17px; margin-top: 0; }
-        #automation_status[data-error="true"] { color: #a52714; }
-        .backtest-controls input[type="number"] { width: 64px; }
-        #ranking_section { margin: 16px 0; }
-        .table-scroll { max-width: 100%; overflow-x: auto; }
-        table { width: 100%; border-collapse: collapse; font-size: 13px; }
-        th, td { padding: 8px; border-bottom: 1px solid #d3dbe2; text-align: left; }
-        th { white-space: nowrap; }
-        #backtest_profit { font-weight: 600; }
-        .note { color: #596673; }
-        #chart_status[data-error="true"] { color: #a52714; }
+        .table-scroll { overflow-x: auto; }
+        table { border-collapse: collapse; }
+        th, td { border: 1px solid #ccc; padding: 3px; white-space: nowrap; }
+        #chart_status[data-error="true"], #automation_status[data-error="true"] { color: #a52714; }
     </style>
     <script src="https://www.gstatic.com/charts/loader.js"></script>
     <script src="/static/indicators.js" defer></script>
@@ -45,121 +25,121 @@
     <script src="/static/chart.js" defer></script>
 </head>
 <body>
-    <main id="chart_app" data-product-code="{{.ProductCode}}" data-duration="{{.Duration}}" data-limit="{{.Limit}}" data-default-strategy="{{.DefaultStrategy}}">
-        <h1>{{.ProductCode}} ローソク足チャート</h1>
-        <div class="toolbar" role="group" aria-label="時間足の切り替え">
-            <button type="button" data-duration="1s" aria-pressed="{{eq .Duration "1s"}}">秒足（1s）</button>
-            <button type="button" data-duration="1m" aria-pressed="{{eq .Duration "1m"}}">分足（1m）</button>
-            <button type="button" data-duration="1h" aria-pressed="{{eq .Duration "1h"}}">時間足（1h）</button>
+<main id="chart_app" data-product-code="{{.ProductCode}}" data-duration="{{.Duration}}" data-limit="{{.Limit}}" data-default-strategy="{{.DefaultStrategy}}">
+    <div>{{.ProductCode}}</div>
+    <div role="group" aria-label="Candle duration">
+        <button type="button" data-duration="1s" aria-pressed="{{eq .Duration "1s"}}">1s</button>
+        <button type="button" data-duration="1m" aria-pressed="{{eq .Duration "1m"}}">1m</button>
+        <button type="button" data-duration="1h" aria-pressed="{{eq .Duration "1h"}}">1h</button>
+    </div>
+    <div id="automation_status" role="status">Loading trading status...</div>
+
+    <form id="technical_form" aria-label="Technical indicators">
+        <div>
+            <label>SMA <input type="checkbox" data-indicator="sma"></label>
+            Period
+            <input type="number" name="smaPeriod1" data-for="sma" aria-label="SMA short period" value="7" min="2" max="1000" required disabled>
+            <input type="number" name="smaPeriod2" data-for="sma" aria-label="SMA middle period" value="14" min="2" max="1000" required disabled>
+            <input type="number" name="smaPeriod3" data-for="sma" aria-label="SMA long period" value="50" min="2" max="1000" required disabled>
         </div>
-        <section class="automation-status" aria-label="自動売買の稼働状態">
-            <h2>自動売買</h2>
-            <p id="automation_status" role="status">自動売買の状態を読み込んでいます。</p>
-            <p id="automation_position"></p>
-            <p id="automation_strategy" class="note"></p>
-            <p class="note">確定足で判断し、次の足で注文します。損切りも確定足の終値で判定します。表示する自動売買の損益は稼働開始からの累計です。</p>
-        </section>
-        <form id="technical_form" aria-label="テクニカル指標の設定">
-            <fieldset>
-                <legend><label><input type="checkbox" data-indicator="sma"> SMA（単純移動平均）</label></legend>
-                <div class="parameters">期間
-                    <input type="number" name="smaPeriod1" data-for="sma" aria-label="SMAの短期期間" value="7" min="2" max="1000" required disabled>
-                    <input type="number" name="smaPeriod2" data-for="sma" aria-label="SMAの中期期間" value="14" min="2" max="1000" required disabled>
-                    <input type="number" name="smaPeriod3" data-for="sma" aria-label="SMAの長期期間" value="50" min="2" max="1000" required disabled>
-                </div>
-            </fieldset>
-            <fieldset>
-                <legend><label><input type="checkbox" data-indicator="ema"> EMA（指数平滑移動平均）</label></legend>
-                <div class="parameters">期間
-                    <input type="number" name="emaPeriod1" data-for="ema" aria-label="EMAの短期期間" value="7" min="2" max="1000" required disabled>
-                    <input type="number" name="emaPeriod2" data-for="ema" aria-label="EMAの中期期間" value="14" min="2" max="1000" required disabled>
-                    <input type="number" name="emaPeriod3" data-for="ema" aria-label="EMAの長期期間" value="50" min="2" max="1000" required disabled>
-                </div>
-            </fieldset>
-            <fieldset>
-                <legend><label><input type="checkbox" data-indicator="bbands"> ボリンジャーバンド</label></legend>
-                <div class="parameters">
-                    <label>期間 <input type="number" name="bbandsN" data-for="bbands" value="20" min="2" max="1000" required disabled></label>
-                    <label>標準偏差の倍率 <input type="number" name="bbandsK" data-for="bbands" value="2" min="0.1" max="10" step="0.1" required disabled></label>
-                </div>
-            </fieldset>
-            <fieldset>
-                <legend><label><input type="checkbox" data-indicator="ichimoku"> 一目均衡表</label></legend>
-                <span class="note">9・26・52期間／先行・遅行26本</span>
-            </fieldset>
-            <fieldset>
-                <legend><label><input type="checkbox" data-indicator="volume"> 出来高</label></legend>
-                <span class="note">Tickerの24時間出来高の増分による概算</span>
-            </fieldset>
-            <fieldset>
-                <legend><label><input type="checkbox" data-indicator="rsi"> RSI</label></legend>
-                <label>期間 <input type="number" name="rsiPeriod" data-for="rsi" value="14" min="2" max="1000" required disabled></label>
-                <span class="note">基準線：30・70</span>
-            </fieldset>
-            <fieldset>
-                <legend><label><input type="checkbox" data-indicator="macd"> MACD</label></legend>
-                <div class="parameters">
-                    <label>短期 <input type="number" name="macdPeriod1" data-for="macd" value="12" min="2" max="1000" required disabled></label>
-                    <label>長期 <input type="number" name="macdPeriod2" data-for="macd" value="26" min="2" max="1000" required disabled></label>
-                    <label>シグナル <input type="number" name="macdPeriod3" data-for="macd" value="9" min="2" max="1000" required disabled></label>
-                </div>
-            </fieldset>
-            <fieldset>
-                <legend><label><input type="checkbox" data-indicator="hv"> HV（ヒストリカルボラティリティ）</label></legend>
-                <div class="parameters">期間
-                    <input type="number" name="hvPeriod1" data-for="hv" aria-label="HVの短期期間" value="21" min="2" max="1000" required disabled>
-                    <input type="number" name="hvPeriod2" data-for="hv" aria-label="HVの中期期間" value="63" min="2" max="1000" required disabled>
-                    <input type="number" name="hvPeriod3" data-for="hv" aria-label="HVの長期期間" value="252" min="2" max="1000" required disabled>
-                </div>
-            </fieldset>
-        </form>
-        <section class="backtest-controls" aria-label="売買イベントとバックテスト">
-            <div class="toolbar">
-                <label><input id="inputEvents" type="checkbox"> 売買イベントを表示</label>
-                <label>戦略
-                    <select id="backtest_strategy">
-                        <option value="ema">EMAクロス</option>
-                        <option value="bbands">ボリンジャーバンド</option>
-                        <option value="ichimoku">一目均衡表</option>
-                        <option value="macd">MACD</option>
-                        <option value="rsi">RSI</option>
-                        <option value="auto">自動売買の記録</option>
-                        <option value="saved">保存済みイベント</option>
-                    </select>
-                </label>
-                <button type="button" id="optimize_button">戦略を比較・最適化</button>
-            </div>
-            <p class="parameters">
-                <span>RSIの売買しきい値：</span>
-                <label>買い <input type="number" id="rsi_buy" value="30" min="1" max="99" required></label>
-                <label>売り <input type="number" id="rsi_sell" value="70" min="1" max="99" required></label>
-            </p>
-            <p class="note">個別戦略の期間・倍率は上の指標設定を使います。個別バックテストは1 BTCの買付から始め、次足始値に設定した手数料・スプレッド・スリッページを反映します。自動売買の記録には各モードの約定数量・手数料を反映します。確定損益には未決済分を含めません。</p>
-            <p id="backtest_profit" role="status" hidden></p>
-        </section>
-        <section id="ranking_section" hidden>
-            <h2>戦略比較・最適化結果</h2>
-            <p id="ranking_caption" class="note"></p>
-            <div class="table-scroll">
-                <table>
-                    <thead><tr><th>戦略</th><th>調整区間の損益</th><th>検証区間コスト前</th><th>検証区間コスト後</th><th>検証の完了取引数</th><th>調整パラメータ</th><th>採用</th><th>表示</th></tr></thead>
-                    <tbody id="ranking_rows"></tbody>
-                </table>
-            </div>
-        </section>
-        <p class="note">指標は必要な本数がそろうと表示します。期間は選択中の時間足の本数です。HVは1本ごとの変動率（%）です。</p>
-        <p class="note">3秒ごとに自動更新します。チャートの操作中は更新を一時停止します。</p>
-        <p id="chart_status" role="status" aria-live="polite">ローソク足データを読み込んでいます。</p>
-        <div id="dashboard_div" hidden>
-            <div id="chart_div" role="img" aria-label="{{.ProductCode}}のローソク足チャート"></div>
-            <section id="volume_panel" class="technical-panel" hidden><h2>出来高（概算）</h2><div id="volume_chart" class="technical-chart"></div></section>
-            <section id="rsi_panel" class="technical-panel" hidden><h2>RSI</h2><div id="rsi_chart" class="technical-chart"></div></section>
-            <section id="macd_panel" class="technical-panel" hidden><h2>MACD</h2><div id="macd_chart" class="technical-chart"></div></section>
-            <section id="hv_panel" class="technical-panel" hidden><h2>HV（%／足）</h2><div id="hv_chart" class="technical-chart"></div></section>
-            <div id="filter_div" aria-label="チャートの表示範囲"></div>
+        <div>
+            <label>EMA <input type="checkbox" data-indicator="ema"></label>
+            Period
+            <input type="number" name="emaPeriod1" data-for="ema" aria-label="EMA short period" value="7" min="2" max="1000" required disabled>
+            <input type="number" name="emaPeriod2" data-for="ema" aria-label="EMA middle period" value="14" min="2" max="1000" required disabled>
+            <input type="number" name="emaPeriod3" data-for="ema" aria-label="EMA long period" value="50" min="2" max="1000" required disabled>
         </div>
-        <p class="note">下のスライダーで表示範囲を変更できます。時刻はUTCで表示します。</p>
-        <noscript>チャートを表示するにはJavaScriptを有効にしてください。</noscript>
-    </main>
+        <div>
+            <label>BBands <input type="checkbox" data-indicator="bbands"></label>
+            <label>N <input type="number" name="bbandsN" data-for="bbands" value="20" min="2" max="1000" required disabled></label>
+            <label>K <input type="number" name="bbandsK" data-for="bbands" value="2" min="0.1" max="10" step="0.1" required disabled></label>
+        </div>
+        <div><label>Ichimoku <input type="checkbox" data-indicator="ichimoku"></label></div>
+        <div><label>Volume <input type="checkbox" data-indicator="volume"></label></div>
+        <div>
+            <label>RSI <input type="checkbox" data-indicator="rsi"></label>
+            <label>Period <input type="number" name="rsiPeriod" data-for="rsi" value="14" min="2" max="1000" required disabled></label>
+        </div>
+        <div>
+            <label>MACD <input type="checkbox" data-indicator="macd"></label>
+            Period
+            <input type="number" name="macdPeriod1" data-for="macd" aria-label="MACD fast period" value="12" min="2" max="1000" required disabled>
+            <input type="number" name="macdPeriod2" data-for="macd" aria-label="MACD slow period" value="26" min="2" max="1000" required disabled>
+            <input type="number" name="macdPeriod3" data-for="macd" aria-label="MACD signal period" value="9" min="2" max="1000" required disabled>
+        </div>
+        <div>
+            <label>HV <input type="checkbox" data-indicator="hv"></label>
+            Period
+            <input type="number" name="hvPeriod1" data-for="hv" aria-label="HV short period" value="21" min="2" max="1000" required disabled>
+            <input type="number" name="hvPeriod2" data-for="hv" aria-label="HV middle period" value="63" min="2" max="1000" required disabled>
+            <input type="number" name="hvPeriod3" data-for="hv" aria-label="HV long period" value="252" min="2" max="1000" required disabled>
+        </div>
+    </form>
+
+    <div>
+        <label>Events <input id="inputEvents" type="checkbox"></label>
+        <label>Strategy
+            <select id="backtest_strategy">
+                <option value="ema">EMA</option>
+                <option value="bbands">BBands</option>
+                <option value="ichimoku">Ichimoku</option>
+                <option value="macd">MACD</option>
+                <option value="rsi">RSI</option>
+                <option value="auto">Auto trades</option>
+                <option value="saved">Saved events</option>
+            </select>
+        </label>
+        <button type="button" id="optimize_button">Optimize</button>
+    </div>
+    <div>
+        RSI levels:
+        <label>Buy <input type="number" id="rsi_buy" value="30" min="1" max="99" required></label>
+        <label>Sell <input type="number" id="rsi_sell" value="70" min="1" max="99" required></label>
+    </div>
+    <div id="backtest_profit" role="status" hidden></div>
+    <div id="chart_status" role="status" aria-live="polite">Loading candles...</div>
+
+    <div id="dashboard_div" hidden>
+        <div id="chart_div" role="img" aria-label="{{.ProductCode}} candlestick chart"></div>
+        <div id="technical_div">
+            <div id="volume_panel" class="bottom_chart" hidden>
+                <span class="technical_title">Volume (estimated)</span>
+                <div id="volume_chart" class="technical-chart"></div>
+            </div>
+            <div id="rsi_panel" class="bottom_chart" hidden>
+                <span class="technical_title">RSI</span>
+                <div id="rsi_chart" class="technical-chart"></div>
+            </div>
+            <div id="macd_panel" class="bottom_chart" hidden>
+                <span class="technical_title">MACD</span>
+                <div id="macd_chart" class="technical-chart"></div>
+            </div>
+            <div id="hv_panel" class="bottom_chart" hidden>
+                <span class="technical_title">HV (% per candle)</span>
+                <div id="hv_chart" class="technical-chart"></div>
+            </div>
+        </div>
+        <div id="filter_div" aria-label="Chart time range"></div>
+    </div>
+
+    <p id="automation_position"></p>
+    <p id="automation_strategy"></p>
+
+    <div id="ranking_section" hidden>
+        <p>Optimization</p>
+        <p id="ranking_caption"></p>
+        <div class="table-scroll">
+            <table>
+                <thead><tr><th>Strategy</th><th>Training net</th><th>Validation gross</th><th>Validation net</th><th>Trades</th><th>Parameters</th><th>Selected</th><th>Chart</th></tr></thead>
+                <tbody id="ranking_rows"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <p>Times are UTC. Refresh: 3 seconds; paused while using the chart.</p>
+    <p>Backtests: 1 BTC entries, configured costs, realized profit only. Auto profit is cumulative. Signals and stops use completed candles; chart settings do not change automation.</p>
+    <p>Volume is estimated. Periods count candles. HV is not annualized.</p>
+    <noscript>Enable JavaScript to display the chart.</noscript>
+</main>
 </body>
 </html>

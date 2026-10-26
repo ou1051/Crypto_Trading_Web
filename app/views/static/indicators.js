@@ -2,7 +2,7 @@ window.CandleIndicators = (() => {
     'use strict';
 
     function settings(form) {
-        if (!form.checkValidity()) throw new Error('指標の期間や倍率を入力範囲内で指定してください。');
+        if (!form.checkValidity()) throw new Error('Enter indicator values within the allowed ranges.');
         const params = new URLSearchParams();
         const enabled = {};
         for (const input of form.querySelectorAll('input[data-indicator]')) {
@@ -13,14 +13,14 @@ window.CandleIndicators = (() => {
             if (enabled[input.dataset.for]) params.set(input.name, input.value);
         }
         if (enabled.macd && Number(params.get('macdPeriod1')) >= Number(params.get('macdPeriod2'))) {
-            throw new Error('MACDの短期期間は長期期間より小さくしてください。');
+            throw new Error('MACD fast period must be less than its slow period.');
         }
         return {params, enabled};
     }
 
     function layout(data, selected, duration) {
         const table = new google.visualization.DataTable();
-        const labels = ['時刻（UTC）', '安値', '始値', '終値', '高値', '出来高'];
+        const labels = ['Time (UTC)', 'Low', 'Open', 'Close', 'High', 'Volume'];
         labels.forEach((label, i) => table.addColumn(i === 0 ? 'datetime' : 'number', label));
         const vectors = [];
         const overlays = [];
@@ -43,27 +43,27 @@ window.CandleIndicators = (() => {
         if (data.bbands) {
             const bands = data.bbands;
             overlay(`BB ${bands.n} +${bands.k}σ`, bands.up, '#455a64');
-            overlay(`BB ${bands.n} 中央`, bands.mid, '#78909c');
+            overlay(`BB ${bands.n} middle`, bands.mid, '#78909c');
             overlay(`BB ${bands.n} −${bands.k}σ`, bands.down, '#455a64');
         }
         if (data.ichimoku) {
             const cloud = data.ichimoku;
-            overlay('転換線', cloud.tenkan, '#1565c0');
-            overlay('基準線', cloud.kijun, '#c62828');
-            overlay('先行スパンA', cloud.senkoua, '#2e7d32');
-            overlay('先行スパンB', cloud.senkoub, '#ef6c00');
-            overlay('遅行スパン', cloud.chikou, '#6a1b9a');
+            overlay('Tenkan', cloud.tenkan, '#1565c0');
+            overlay('Kijun', cloud.kijun, '#c62828');
+            overlay('Senkou A', cloud.senkoua, '#2e7d32');
+            overlay('Senkou B', cloud.senkoub, '#ef6c00');
+            overlay('Chikou', cloud.chikou, '#6a1b9a');
         }
         if (selected.enabled.volume) panels.push({name: 'volume', type: 'ColumnChart', columns: [5], options: {colors: ['#78909c'], vAxis: {minValue: 0}}});
         if (data.rsi) {
             const thresholds = value => data.candles.map(() => value);
-            panels.push({name: 'rsi', type: 'LineChart', columns: [column('上限 70', thresholds(70)), column(`RSI ${data.rsi.period}`, data.rsi.values), column('下限 30', thresholds(30))], options: {
+            panels.push({name: 'rsi', type: 'LineChart', columns: [column('Upper 70', thresholds(70)), column(`RSI ${data.rsi.period}`, data.rsi.values), column('Lower 30', thresholds(30))], options: {
                 vAxis: {viewWindow: {min: 0, max: 100}}, series: {0: {color: '#90a4ae', lineDashStyle: [4, 4]}, 1: {color: '#ad1457'}, 2: {color: '#90a4ae', lineDashStyle: [4, 4]}}
             }});
         }
         if (data.macd) {
             const macd = data.macd;
-            panels.push({name: 'macd', type: 'ComboChart', columns: [column('ヒストグラム', macd.macd_hist), column(`MACD ${macd.fast_period}/${macd.slow_period}`, macd.macd), column(`シグナル ${macd.signal_period}`, macd.macd_signal)], options: {
+            panels.push({name: 'macd', type: 'ComboChart', columns: [column('Histogram', macd.macd_hist), column(`MACD ${macd.fast_period}/${macd.slow_period}`, macd.macd), column(`Signal ${macd.signal_period}`, macd.macd_signal)], options: {
                 seriesType: 'bars', series: {0: {color: '#b0bec5'}, 1: {type: 'line', color: '#1565c0'}, 2: {type: 'line', color: '#e65100'}}
             }});
         }
@@ -88,8 +88,8 @@ window.CandleIndicators = (() => {
                 signals.get(bucket).push(event);
             }
             markers = {index: labels.length, annotation: labels.length+1, text: labels.length+2};
-            labels.push('売買イベント','annotation','annotationText');
-            table.addColumn('number','売買イベント');
+            labels.push('Events','annotation','annotationText');
+            table.addColumn('number','Events');
             table.addColumn({type:'string',role:'annotation'});
             table.addColumn({type:'string',role:'annotationText'});
         }
@@ -113,13 +113,13 @@ window.CandleIndicators = (() => {
 
     function charts(layout) {
         const dateColumn = {calc: (table, row) => table.getFormattedValue(row, 0), type: 'string'};
-        const series = {0: {labelInLegend: 'ローソク足'}};
+        const series = {0: {labelInLegend: 'Candles'}};
         layout.overlays.forEach((line, i) => { series[i + 1] = {type: 'line', color: line.color, lineWidth: 1}; });
         if (layout.markers) series[layout.overlays.length+1] = {type:'line',lineWidth:0,pointSize:3,color:'#25313c',visibleInLegend:false};
         const charts = [new google.visualization.ChartWrapper({
             chartType: 'ComboChart', containerId: 'chart_div',
             options: {
-                height: 440, legend: layout.overlays.length ? {position: 'bottom', maxLines: 4, textStyle: {fontSize: 11}} : 'none',
+                height: 400, legend: 'none',
                 seriesType: 'candlesticks', series, interpolateNulls: false, hAxis: {slantedText: false},
                 candlestick: {fallingColor: {strokeWidth: 0, fill: '#a52714'}, risingColor: {strokeWidth: 0, fill: '#0f9d58'}}
             },
@@ -128,7 +128,7 @@ window.CandleIndicators = (() => {
         for (const name of ['volume', 'rsi', 'macd', 'hv']) document.getElementById(`${name}_panel`).hidden = !layout.panels.some(panel => panel.name === name);
         for (const panel of layout.panels) charts.push(new google.visualization.ChartWrapper({
             chartType: panel.type, containerId: `${panel.name}_chart`,
-            options: {height: 170, legend: {position: 'bottom', textStyle: {fontSize: 11}}, hAxis: {slantedText: false}, interpolateNulls: false, ...panel.options},
+            options: {height: 170, legend: 'none', hAxis: {slantedText: false}, interpolateNulls: false, ...panel.options},
             view: {columns: [dateColumn, ...panel.columns]}
         }));
         return charts;

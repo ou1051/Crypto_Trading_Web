@@ -1,43 +1,40 @@
 <!doctype html>
-<html lang="ja">
+<html lang="en">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{{.ProductCode}} ローソク足チャート</title>
+    <title>{{.ProductCode}} Chart</title>
     <style>
-        body { margin: 32px auto; padding: 0 20px; max-width: 1100px; font-family: sans-serif; color: #25313c; }
-        h1 { font-size: 24px; }
-        #chart_div { width: 100%; min-height: 500px; }
-        .note { color: #596673; }
+        #chart_div { width: 600px; max-width: 100%; height: 400px; border: 1px solid #ccc; }
     </style>
     <script src="https://www.gstatic.com/charts/loader.js"></script>
 </head>
 <body>
-    <h1>{{.ProductCode}} ローソク足チャート</h1>
-    <p class="note">足の長さ：{{.Duration}} ／ 時刻：UTC</p>
-    {{if not .Rows}}<p>データを収集中です。少し待ってページを再読み込みしてください。</p>{{end}}
-    <div id="chart_div" role="img" aria-label="{{.ProductCode}}のローソク足チャート"></div>
-    <p class="note">最新のデータを表示するには、ページを再読み込みしてください。</p>
+    <div>{{.ProductCode}}</div>
+    <p>Duration: {{.Duration}} / Time: UTC</p>
+    {{if not .Rows}}<p>Waiting for market data. Reload after a few moments.</p>{{end}}
+    <div id="chart_div" role="img" aria-label="{{.ProductCode}} candlestick chart"></div>
+    <p>Reload for the latest data.</p>
     <script>
         const rows = {{.Rows}};
         if (typeof google === 'undefined') {
-            document.getElementById('chart_div').textContent = 'チャートを読み込めませんでした。インターネット接続を確認してください。';
+            document.getElementById('chart_div').textContent = 'Could not load Google Charts. Check your connection.';
         } else {
-            google.charts.load('current', {packages: ['corechart']});
+            google.charts.load('current', {packages: ['corechart'], language: 'en'});
             google.charts.setOnLoadCallback(drawChart);
         }
         function drawChart() {
             if (rows.length === 0) return;
             const data = new google.visualization.DataTable();
-            data.addColumn('string', '時刻（UTC）');
-            data.addColumn('number', '安値');
-            data.addColumn('number', '始値');
-            data.addColumn('number', '終値');
-            data.addColumn('number', '高値');
+            data.addColumn('string', 'Time (UTC)');
+            data.addColumn('number', 'Low');
+            data.addColumn('number', 'Open');
+            data.addColumn('number', 'Close');
+            data.addColumn('number', 'High');
             data.addRows(rows);
             const chart = new google.visualization.CandlestickChart(document.getElementById('chart_div'));
             chart.draw(data, {
-                height: 500,
+                height: 400,
                 legend: 'none',
                 candlestick: {
                     fallingColor: {strokeWidth: 0, fill: '#a52714'},

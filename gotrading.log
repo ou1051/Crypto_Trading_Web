@@ -245,3 +245,5 @@ ga('send', 'pageview');
 2026/10/24 18:54:31 bitflyer.go:60: action=doRequest endpoint=https://api.bitflyer.com/v1/me/getbalance
 2026/10/24 18:54:32 bitflyer.go:98: action=GetBalance response=
 2026/10/24 18:54:32 bitflyer.go:100: action=GetBalance err=bitflyer: GET /v1/me/getbalance: HTTP 401 Unauthorized
+2026/10/26 18:50:08 webserver.go:215: chart=http://localhost:8080/chart/
+2026/10/26 19:06:54 webserver.go:215: chart=http://localhost:8080/chart/

@@ -1,8 +1,8 @@
 window.CandleBacktests = (() => {
     'use strict';
-    const names = {ema: 'EMA', bbands: 'ボリンジャーバンド', ichimoku: '一目均衡表', macd: 'MACD', rsi: 'RSI', saved: '保存済みイベント', auto: '自動売買の記録'};
+    const names = {ema: 'EMA', bbands: 'BBands', ichimoku: 'Ichimoku', macd: 'MACD', rsi: 'RSI', saved: 'Saved events', auto: 'Auto trades'};
     const fields = {ema: ['emaPeriod1','emaPeriod2'], bbands: ['bbandsN','bbandsK'], ichimoku: [], macd: ['macdPeriod1','macdPeriod2','macdPeriod3'], rsi: ['rsiPeriod'], saved: []};
-    const parameterLabels = {emaPeriod1:'短期',emaPeriod2:'長期',bbandsN:'期間',bbandsK:'倍率',macdPeriod1:'短期',macdPeriod2:'長期',macdPeriod3:'シグナル',rsiPeriod:'期間',rsiBuy:'買い',rsiSell:'売り'};
+    const parameterLabels = {emaPeriod1:'short',emaPeriod2:'long',bbandsN:'N',bbandsK:'K',macdPeriod1:'fast',macdPeriod2:'slow',macdPeriod3:'signal',rsiPeriod:'period',rsiBuy:'buy',rsiSell:'sell'};
     const app = document.getElementById('chart_app');
     const form = document.getElementById('technical_form');
     const enabled = document.getElementById('inputEvents');
@@ -14,7 +14,7 @@ window.CandleBacktests = (() => {
     const caption = document.getElementById('ranking_caption');
     const buy = document.getElementById('rsi_buy');
     const sell = document.getElementById('rsi_sell');
-    const format = new Intl.NumberFormat('ja-JP', {maximumFractionDigits: 2});
+    const format = new Intl.NumberFormat('en-US', {maximumFractionDigits: 2});
     let changed;
     strategy.value = app.dataset.defaultStrategy || 'ema';
 
@@ -43,9 +43,9 @@ window.CandleBacktests = (() => {
             const input = inputs.find(input => input.name === name);
             if (input) params.set(name, input.value);
         }
-        if (strategy.value === 'ema' && Number(params.get('emaPeriod1')) >= Number(params.get('emaPeriod2'))) throw new Error('EMAの短期期間は長期期間より小さくしてください。');
+        if (strategy.value === 'ema' && Number(params.get('emaPeriod1')) >= Number(params.get('emaPeriod2'))) throw new Error('EMA short period must be less than its long period.');
         if (strategy.value === 'rsi') {
-            if (!(Number(buy.value) > 0 && Number(buy.value) < Number(sell.value) && Number(sell.value) < 100)) throw new Error('RSIのしきい値は0より大きく100未満で、買いを売りより小さくしてください。');
+            if (!(Number(buy.value) > 0 && Number(buy.value) < Number(sell.value) && Number(sell.value) < 100)) throw new Error('RSI levels must satisfy 0 < buy < sell < 100.');
             params.set('rsiBuy', buy.value);
             params.set('rsiSell', sell.value);
         }
@@ -61,43 +61,43 @@ window.CandleBacktests = (() => {
         const state = data.automation;
         status.dataset.error = String(Boolean(state?.halted || state?.last_error));
         if (state) {
-            const mode = state.mode === 'paper' ? 'ペーパートレード（仮想売買）' : '実取引';
-            const duration = `${state.duration / 1e9}秒足`;
-            status.textContent = `${mode} ／ ${duration} ／ ${state.halted ? '停止中' : state.pending ? '注文の約定確認待ち' : '稼働中'}${state.last_error ? ` ／ ${state.last_error}` : ''}`;
-            const cash = state.mode === 'paper' ? ` ／ 仮想残高 ${money(state.cash)}` : '';
-            position.textContent = `保有 ${Number(state.quantity).toFixed(8)} BTC ／ 確定損益 ${money(state.realized_profit)}${cash} ／ 損切り価格 ${state.stop_limit > 0 ? money(state.stop_limit) : '—'}`;
+            const mode = state.mode === 'paper' ? 'Paper trading' : 'Live trading';
+            const duration = {1000000000:'1s',60000000000:'1m',3600000000000:'1h'}[state.duration] || `${state.duration / 1e9}s`;
+            status.textContent = `${mode} | ${duration} | ${state.halted ? 'Stopped' : state.pending ? 'Waiting for fill' : 'Running'}${state.last_error ? ` | ${state.last_error}` : ''}`;
+            const cash = state.mode === 'paper' ? ` | Paper cash ${money(state.cash)}` : '';
+            position.textContent = `Position ${Number(state.quantity).toFixed(8)} BTC | Realized profit ${money(state.realized_profit)}${cash} | Stop ${state.stop_limit > 0 ? money(state.stop_limit) : '-'}`;
             const params = state.params || {};
-            const selected = [['ema_enable','EMA'],['bb_enable','ボリンジャーバンド'],['ichimoku_enable','一目均衡表'],['macd_enable','MACD'],['rsi_enable','RSI']].filter(([key]) => params[key]).map(([,name]) => name);
+            const selected = [['ema_enable','EMA'],['bb_enable','BBands'],['ichimoku_enable','Ichimoku'],['macd_enable','MACD'],['rsi_enable','RSI']].filter(([key]) => params[key]).map(([,name]) => name);
             const slip = state.policy?.costs?.slippage_rate || 0;
-            strategyStatus.textContent = `採用指標：${selected.join('・') || 'データまたは次の最適化を待っています'}。${state.mode === 'paper' ? '仮想売買の手数料率' : '売却数量の手数料確保率'} ${(state.fee_rate * 100).toFixed(3)}%。${state.mode === 'paper' ? ` 仮想スリッページ ${(slip * 100).toFixed(3)}%／片道。` : ''}`;
+            strategyStatus.textContent = `Indicators: ${selected.join(', ') || 'waiting for data or optimization'}. ${state.mode === 'paper' ? 'Paper fee' : 'Sale fee reserve'} ${(state.fee_rate * 100).toFixed(3)}%.${state.mode === 'paper' ? ` Paper slippage ${(slip * 100).toFixed(3)}% per fill.` : ''}`;
         } else {
-            status.textContent = '自動売買の開始を待っています。';
+            status.textContent = 'Trading has not started.';
             position.textContent = '';
             strategyStatus.textContent = '';
         }
         profit.hidden = !data.events;
         if (data.events) {
-            const title = names[data.backtest?.strategy] || '売買イベント';
-            const shortage = data.backtest?.available === false ? '／計算に必要な本数が不足しています' : '';
-            const countLabel = data.backtest?.strategy === 'auto' ? '売却約定' : '完了取引';
-            profit.textContent = `${title}：確定損益 ${money(data.events.profit)} ／ ${countLabel} ${data.events.completed_trades}回${data.events.holding ? ' ／ 未決済あり' : ''}${shortage}`;
-            if (data.backtest?.costs) profit.textContent += ` ／ コスト前 ${money(data.backtest.gross_profit)}`;
+            const title = names[data.backtest?.strategy] || 'Events';
+            const shortage = data.backtest?.available === false ? (data.backtest.strategy === 'auto' ? ' | Trading has not started' : ' | Not enough continuous candle data') : '';
+            const countLabel = data.backtest?.strategy === 'auto' ? 'Sell fills' : 'Trades';
+            profit.textContent = `${title}: Realized profit ${money(data.events.profit)} | ${countLabel} ${data.events.completed_trades}${data.events.holding ? ' | Open position' : ''}${shortage}`;
+            if (data.backtest?.costs) profit.textContent += ` | Gross ${money(data.backtest.gross_profit)}`;
         }
         if (!data.optimization) return;
         const result = data.optimization;
         ranking.hidden = false;
         rows.replaceChildren();
-        const asOf = result.candle_count ? new Date(result.as_of).toISOString().replace('T',' ').slice(0,19) + ' UTC' : 'データなし';
+        const asOf = result.candle_count ? new Date(result.as_of).toISOString().replace('T',' ').slice(0,19) + ' UTC' : 'no data';
         if (result.policy) {
             const costs = result.policy.costs;
-            caption.textContent = `比較時点：${asOf} ／ 調整 ${result.training_count}本・検証 ${result.validation_count}本。前半だけでパラメータを調整し、後半は未保有から評価します。両区間のコスト後損益が正、かつ検証で${result.policy.min_validation_trades}回以上の完了取引を採用条件とします。手数料 ${(costs.fee_rate*100).toFixed(3)}%／片道・全スプレッド ${(costs.spread_rate*100).toFixed(3)}%・スリッページ ${(costs.slippage_rate*100).toFixed(3)}%／片道。モデル上の往復損益分岐値幅は約 ${(result.break_even_rise*100).toFixed(3)}%です。検証区間も戦略選出に使うため、将来の成績を保証するものではありません。`;
+            caption.textContent = `As of ${asOf}. Training: ${result.training_count} bars; validation: ${result.validation_count} bars, starting flat. Selection needs positive net profit in both periods and at least ${result.policy.min_validation_trades} validation trades. Fee ${(costs.fee_rate*100).toFixed(3)}% per fill, full spread ${(costs.spread_rate*100).toFixed(3)}%, slippage ${(costs.slippage_rate*100).toFixed(3)}% per fill. Modeled round-trip break-even: ${(result.break_even_rise*100).toFixed(3)}%. Validation also influences selection.`;
         } else {
-            caption.textContent = `比較時点：${asOf} ／ ${result.candle_count}本。`;
+            caption.textContent = `As of ${asOf}. ${result.candle_count} bars.`;
         }
         for (const rank of result.rankings) {
             const row = document.createElement('tr');
-            const parameters = Object.entries(rank.parameters).map(([key,value]) => `${parameterLabels[key] || key} ${value}`).join(' / ') || '9・26・52（固定）';
-            for (const value of [names[rank.strategy], rank.training_profit == null ? '—' : money(rank.training_profit), rank.available ? money(rank.gross_performance ?? rank.performance) : '完了取引なし', rank.available ? money(rank.performance) : '完了取引なし', rank.completed_trades, parameters, rank.enable ? '採用' : '見送り']) {
+            const parameters = Object.entries(rank.parameters).map(([key,value]) => `${parameterLabels[key] || key} ${value}`).join(' / ') || '9/26/52 (fixed)';
+            for (const value of [names[rank.strategy], rank.training_profit == null ? '-' : money(rank.training_profit), rank.available ? money(rank.gross_performance ?? rank.performance) : 'No trades', rank.available ? money(rank.performance) : 'No trades', rank.completed_trades, parameters, rank.enable ? 'Yes' : 'No']) {
                 const cell = document.createElement('td');
                 cell.textContent = String(value);
                 row.append(cell);
@@ -105,7 +105,7 @@ window.CandleBacktests = (() => {
             const cell = document.createElement('td');
             const button = document.createElement('button');
             button.type = 'button';
-            button.textContent = '設定を表示';
+            button.textContent = 'Show';
             button.disabled = !rank.available;
             button.addEventListener('click', () => {
                 enabled.checked = true;
@@ -124,7 +124,7 @@ window.CandleBacktests = (() => {
         }
     }
 
-    function busy(value) { optimizeButton.disabled = value; optimizeButton.textContent = value ? '最適化しています…' : '戦略を比較・最適化'; }
+    function busy(value) { optimizeButton.disabled = value; optimizeButton.textContent = value ? 'Optimizing...' : 'Optimize'; }
     function reset() { ranking.hidden = true; profit.hidden = true; }
     return {initialize, parameters, render, busy, reset};
 })();
