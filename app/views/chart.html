@@ -134,7 +134,7 @@
                 <label>買い <input type="number" id="rsi_buy" value="30" min="1" max="99" required></label>
                 <label>売り <input type="number" id="rsi_sell" value="70" min="1" max="99" required></label>
             </p>
-            <p class="note">個別戦略の期間・倍率は上の指標設定を使います。個別バックテストは1 BTC・次足始値で仮想約定し、手数料・スリッページは未反映です。自動売買の記録には実際の数量・手数料を反映します。確定損益には未決済分を含めません。</p>
+            <p class="note">個別戦略の期間・倍率は上の指標設定を使います。個別バックテストは1 BTCの買付から始め、次足始値に設定した手数料・スプレッド・スリッページを反映します。自動売買の記録には各モードの約定数量・手数料を反映します。確定損益には未決済分を含めません。</p>
             <p id="backtest_profit" role="status" hidden></p>
         </section>
         <section id="ranking_section" hidden>
@@ -142,7 +142,7 @@
             <p id="ranking_caption" class="note"></p>
             <div class="table-scroll">
                 <table>
-                    <thead><tr><th>戦略</th><th>確定損益</th><th>完了取引数</th><th>最適パラメータ</th><th>採用</th><th>表示</th></tr></thead>
+                    <thead><tr><th>戦略</th><th>調整区間の損益</th><th>検証区間コスト前</th><th>検証区間コスト後</th><th>検証の完了取引数</th><th>調整パラメータ</th><th>採用</th><th>表示</th></tr></thead>
                     <tbody id="ranking_rows"></tbody>
                 </table>
             </div>

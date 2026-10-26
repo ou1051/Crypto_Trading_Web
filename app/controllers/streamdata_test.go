@@ -3,6 +3,7 @@ package controllers
 import (
 	"context"
 	"errors"
+	"reflect"
 	"testing"
 	"time"
 
@@ -38,8 +39,10 @@ func setupApplication(t *testing.T) {
 	previousConfig, previousDB := config.Config, models.DbConnection
 	config.Config = config.ConfigList{
 		ProductCode: "BTC_USD", SQLDriver: "sqlite3", DbName: ":memory:",
-		Durations:     map[string]time.Duration{"1s": time.Second, "1m": time.Minute, "1h": time.Hour},
-		TradeDuration: time.Minute,
+		Durations:       map[string]time.Duration{"1s": time.Second, "1m": time.Minute, "1h": time.Hour},
+		TradeDuration:   time.Minute,
+		ValidationRatio: .3, MinValidationTrades: 2, DataLimit: 365, NumRanking: 3,
+		FeeRate: .0012, SpreadRate: .0005, SlippageRate: .0005,
 	}
 	if err := models.InitDB("sqlite3", ":memory:", config.Config.ProductCode, config.Config.Durations); err != nil {
 		t.Fatal(err)
@@ -138,5 +141,98 @@ func TestBarNotificationsFollowConfiguredDurationAndNeverBlockIngestion(t *testi
 	candle, err := models.GetCandle("BTC_USD", time.Minute, start.Add(2*time.Minute))
 	if err != nil || candle.Close != 104 {
 		t.Fatal("unconsumed trade notifications stopped ingestion", candle, err)
+	}
+}
+
+type scriptedTickerSource struct {
+	sessions []fakeTickerSource
+	next     int
+}
+
+func (source *scriptedTickerSource) GetRealTimeTickerContext(ctx context.Context, product string, out chan<- bitflyer.Ticker) error {
+	if source.next >= len(source.sessions) {
+		close(out)
+		return errors.New("disconnected")
+	}
+	session := source.sessions[source.next]
+	source.next++
+	return session.GetRealTimeTickerContext(ctx, product, out)
+}
+
+func TestReconnectResetsVolumeBaselineAndRetainsTimestampWatermark(t *testing.T) {
+	setupApplication(t)
+	start := time.Now().UTC().Truncate(time.Minute)
+	source := &scriptedTickerSource{sessions: []fakeTickerSource{
+		{tickers: []bitflyer.Ticker{streamSample(start, 1, 100, 1000), streamSample(start.Add(time.Second), 2, 101, 1002)}, err: errors.New("disconnect")},
+		{tickers: []bitflyer.Ticker{
+			streamSample(start, 1, 999, 5000), // Replayed older tick must not rewrite stored OHLC.
+			streamSample(start.Add(2*time.Second), 3, 102, 9000),
+			streamSample(start.Add(3*time.Second), 4, 103, 9003),
+		}, err: errors.New("disconnect again")},
+	}}
+	stop := errors.New("test complete")
+	var delays []time.Duration
+	err := streamWithRetry(context.Background(), source, config.Config, nil, func(_ context.Context, delay time.Duration) error {
+		delays = append(delays, delay)
+		if len(delays) == 2 {
+			return stop
+		}
+		return nil
+	})
+	if !errors.Is(err, stop) || !reflect.DeepEqual(delays, []time.Duration{time.Second, 2 * time.Second}) {
+		t.Fatal("reconnection failed", delays, err)
+	}
+	candle, err := models.GetCandle("BTC_USD", time.Minute, start)
+	if err != nil || candle.Open != 100 || candle.High != 103 || candle.Close != 103 || candle.Volume != 5 {
+		t.Fatal("reconnection corrupted candles or volume", candle, err)
+	}
+}
+
+func TestReconnectBackoffIsBoundedAndStorageErrorsAreFatal(t *testing.T) {
+	setupApplication(t)
+	source := &scriptedTickerSource{}
+	stop := errors.New("test complete")
+	var delays []time.Duration
+	err := streamWithRetry(context.Background(), source, config.Config, nil, func(_ context.Context, delay time.Duration) error {
+		delays = append(delays, delay)
+		if len(delays) == 7 {
+			return stop
+		}
+		return nil
+	})
+	if !errors.Is(err, stop) || !reflect.DeepEqual(delays, []time.Duration{time.Second, 2 * time.Second, 4 * time.Second, 8 * time.Second, 16 * time.Second, 30 * time.Second, 30 * time.Second}) {
+		t.Fatal("unbounded backoff", delays, err)
+	}
+	models.DbConnection.Close()
+	called := false
+	err = streamWithRetry(context.Background(), fakeTickerSource{tickers: []bitflyer.Ticker{streamSample(time.Now().UTC(), 1, 100, 1000)}}, config.Config, nil, func(context.Context, time.Duration) error { called = true; return stop })
+	if err == nil || called {
+		t.Fatal("storage failure was retried", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := waitForRetry(ctx, 30*time.Second); !errors.Is(err, context.Canceled) {
+		t.Fatal("backoff did not honor cancellation", err)
+	}
+}
+
+func TestIngestionWaitsForAFullCandleAfterAConnectionStarts(t *testing.T) {
+	setupApplication(t)
+	start := time.Now().UTC().Truncate(time.Minute)
+	bars := make(chan bitflyer.Ticker, 1)
+	cursor := &tickerCursor{}
+	first := fakeTickerSource{tickers: []bitflyer.Ticker{streamSample(start.Add(40*time.Second), 1, 100, 1000), streamSample(start.Add(time.Minute), 2, 101, 1001)}}
+	if err := ingestSession(context.Background(), first, config.Config, bars, cursor); err != nil {
+		t.Fatal(err)
+	}
+	if len(bars) != 0 {
+		t.Fatal("partially collected opening candle triggered a decision")
+	}
+	second := fakeTickerSource{tickers: []bitflyer.Ticker{streamSample(start.Add(90*time.Second), 3, 102, 1002), streamSample(start.Add(2*time.Minute), 4, 103, 1003), streamSample(start.Add(3*time.Minute), 5, 104, 1004)}}
+	if err := ingestSession(context.Background(), second, config.Config, bars, cursor); err != nil {
+		t.Fatal(err)
+	}
+	if len(bars) != 1 || (<-bars).TickID != 5 {
+		t.Fatal("reconnection did not wait for a fully collected candle")
 	}
 }

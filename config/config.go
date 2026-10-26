@@ -9,22 +9,26 @@ import (
 )
 
 type ConfigList struct {
-	ApiKey           string
-	ApiSecret        string
-	LogFile          string
-	ProductCode      string
-	TradeDuration    time.Duration
-	Durations        map[string]time.Duration
-	DbName           string
-	SQLDriver        string
-	Port             int
-	BackTest         bool
-	UsePercent       float64
-	DataLimit        int
-	StopLimitPercent float64
-	NumRanking       int
-	PaperBalance     float64
-	FeeRate          float64
+	ApiKey              string
+	ApiSecret           string
+	LogFile             string
+	ProductCode         string
+	TradeDuration       time.Duration
+	Durations           map[string]time.Duration
+	DbName              string
+	SQLDriver           string
+	Port                int
+	BackTest            bool
+	UsePercent          float64
+	DataLimit           int
+	StopLimitPercent    float64
+	NumRanking          int
+	PaperBalance        float64
+	FeeRate             float64
+	SpreadRate          float64
+	SlippageRate        float64
+	ValidationRatio     float64
+	MinValidationTrades int
 }
 
 var Config ConfigList
@@ -86,6 +90,22 @@ func Load(filename string) (ConfigList, error) {
 	settings.FeeRate, err = strconv.ParseFloat(section.Key("fee_rate").MustString("0.0012"), 64)
 	if err != nil || !(settings.FeeRate >= 0 && settings.FeeRate <= .1) {
 		return ConfigList{}, fmt.Errorf("fee_rate must be between 0 and 0.1")
+	}
+	settings.SpreadRate, err = strconv.ParseFloat(section.Key("spread_rate").MustString("0.0005"), 64)
+	if err != nil || !(settings.SpreadRate >= 0 && settings.SpreadRate <= .1) {
+		return ConfigList{}, fmt.Errorf("spread_rate must be between 0 and 0.1")
+	}
+	settings.SlippageRate, err = strconv.ParseFloat(section.Key("slippage_rate").MustString("0.0005"), 64)
+	if err != nil || !(settings.SlippageRate >= 0 && settings.SlippageRate <= .1) {
+		return ConfigList{}, fmt.Errorf("slippage_rate must be between 0 and 0.1")
+	}
+	settings.ValidationRatio, err = strconv.ParseFloat(section.Key("validation_ratio").MustString("0.3"), 64)
+	if err != nil || !(settings.ValidationRatio > 0 && settings.ValidationRatio < 1) {
+		return ConfigList{}, fmt.Errorf("validation_ratio must be greater than 0 and less than 1")
+	}
+	settings.MinValidationTrades, err = strconv.Atoi(section.Key("min_validation_trades").MustString("2"))
+	if err != nil || settings.MinValidationTrades < 1 || settings.MinValidationTrades > 1000 {
+		return ConfigList{}, fmt.Errorf("min_validation_trades must be between 1 and 1000")
 	}
 	return settings, nil
 }

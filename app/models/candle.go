@@ -91,7 +91,7 @@ func CreateCandleWithDuration(ticker bitflyer.Ticker, productCode string, durati
 		return false, err
 	}
 	dateTime, price := ticker.DateTime(), ticker.GetMidPrice()
-	if ticker.ProductCode != productCode || dateTime.IsZero() || price <= 0 || math.IsNaN(price) || math.IsInf(price, 0) || volume < 0 || math.IsNaN(volume) || math.IsInf(volume, 0) {
+	if ticker.ProductCode != productCode || dateTime.IsZero() || !validAmount(ticker.BestBid) || !validAmount(ticker.BestAsk) || ticker.BestBid > ticker.BestAsk || price <= 0 || math.IsNaN(price) || math.IsInf(price, 0) || volume < 0 || math.IsNaN(volume) || math.IsInf(volume, 0) {
 		return false, fmt.Errorf("invalid ticker data")
 	}
 	db, err := database()

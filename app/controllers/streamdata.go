@@ -2,8 +2,11 @@ package controllers
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"log"
 	"math"
+	"time"
 
 	"gotrading/app/models"
 	"gotrading/bitflyer"
@@ -26,7 +29,49 @@ func StreamIngestionData(ctx context.Context) error {
 	done := make(chan struct{})
 	go func() { defer close(done); ai.Run(ctx, bars) }()
 	defer func() { cancel(); <-done }()
-	return ingestStreamWithBars(ctx, apiClient, config.Config, bars)
+	return streamWithRetry(ctx, apiClient, config.Config, bars, waitForRetry)
+}
+
+type tickerStreamError struct{ error }
+
+func (err *tickerStreamError) Unwrap() error { return err.error }
+
+func waitForRetry(ctx context.Context, delay time.Duration) error {
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
+}
+
+// Only feed failures are retried. Invalid ticks and storage errors remain fatal.
+// Restarting the ingestion session resets the rolling-volume baseline and its
+// partial-candle warmup, while keeping the trading worker and order journal alive.
+func streamWithRetry(ctx context.Context, source tickerSource, settings config.ConfigList, bars chan bitflyer.Ticker, wait func(context.Context, time.Duration) error) error {
+	delay := time.Second
+	cursor := &tickerCursor{}
+	for {
+		started := time.Now()
+		err := ingestSession(ctx, source, settings, bars, cursor)
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		var feedError *tickerStreamError
+		if err != nil && !errors.As(err, &feedError) {
+			return err
+		}
+		if time.Since(started) >= time.Minute {
+			delay = time.Second
+		}
+		log.Printf("action=reconnect_ticker retry_in=%s err=%v", delay, err)
+		if err := wait(ctx, delay); err != nil {
+			return err
+		}
+		delay = min(delay*2, 30*time.Second)
+	}
 }
 
 func ingestStream(ctx context.Context, source tickerSource, settings config.ConfigList) (err error) {
@@ -34,6 +79,15 @@ func ingestStream(ctx context.Context, source tickerSource, settings config.Conf
 }
 
 func ingestStreamWithBars(ctx context.Context, source tickerSource, settings config.ConfigList, bars chan bitflyer.Ticker) (err error) {
+	return ingestSession(ctx, source, settings, bars, &tickerCursor{})
+}
+
+type tickerCursor struct {
+	stamp time.Time
+	id    int
+}
+
+func ingestSession(ctx context.Context, source tickerSource, settings config.ConfigList, bars chan bitflyer.Ticker, cursor *tickerCursor) (err error) {
 	ctx, cancel := context.WithCancel(ctx)
 	tickers := make(chan bitflyer.Ticker)
 	done := make(chan error, 1)
@@ -42,11 +96,14 @@ func ingestStreamWithBars(ctx context.Context, source tickerSource, settings con
 		cancel()
 		sourceErr := <-done
 		if err == nil {
-			err = sourceErr
+			if sourceErr != nil {
+				err = &tickerStreamError{sourceErr}
+			}
 		}
 	}()
 
 	var previous *bitflyer.Ticker
+	var readyAfter time.Time
 	for {
 		select {
 		case <-ctx.Done():
@@ -61,12 +118,14 @@ func ingestStreamWithBars(ctx context.Context, source tickerSource, settings con
 			if ticker.VolumeByProduct < 0 || math.IsNaN(ticker.VolumeByProduct) || math.IsInf(ticker.VolumeByProduct, 0) {
 				return fmt.Errorf("received ticker with invalid volume")
 			}
+			if ticker.DateTime().Before(cursor.stamp) || (ticker.DateTime().Equal(cursor.stamp) && ticker.TickID == cursor.id) {
+				continue
+			}
+			if readyAfter.IsZero() {
+				readyAfter = ticker.DateTime().Truncate(settings.TradeDuration).Add(2 * settings.TradeDuration)
+			}
 			volume := 0.0
 			if previous != nil {
-				if ticker.DateTime().Before(previous.DateTime()) ||
-					(ticker.TickID == previous.TickID && ticker.DateTime().Equal(previous.DateTime())) {
-					continue
-				}
 				// A rolling 24h total cannot give exact trade volume. Use only positive
 				// changes as an estimate; never repeatedly add the entire 24h total.
 				volume = math.Max(0, ticker.VolumeByProduct-previous.VolumeByProduct)
@@ -81,7 +140,7 @@ func ingestStreamWithBars(ctx context.Context, source tickerSource, settings con
 					newTradeBar = true
 				}
 			}
-			if newTradeBar && bars != nil {
+			if newTradeBar && bars != nil && !ticker.DateTime().Truncate(settings.TradeDuration).Before(readyAfter) {
 				// Slow HTTP order checks must not stop candle ingestion. Only the
 				// newest unprocessed bar is useful; old signals must not be replayed.
 				select {
@@ -94,6 +153,7 @@ func ingestStreamWithBars(ctx context.Context, source tickerSource, settings con
 				}
 			}
 			previous = &ticker
+			cursor.stamp, cursor.id = ticker.DateTime(), ticker.TickID
 		}
 	}
 }

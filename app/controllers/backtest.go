@@ -83,11 +83,11 @@ func parseBacktest(query url.Values) (backtestRequest, error) {
 
 func (request backtestRequest) apply(df *models.DataFrameCandle) error {
 	if request.optimize {
-		limit := config.Config.NumRanking
-		if limit == 0 {
-			limit = 3
+		var err error
+		df.Optimization, err = df.OptimizeValidated(strategyPolicy(config.Config))
+		if err != nil {
+			return err
 		}
-		df.Optimization = df.OptimizeStrategies(limit)
 	}
 	if request.events {
 		if request.strategy == "auto" {
@@ -106,7 +106,7 @@ func (request backtestRequest) apply(df *models.DataFrameCandle) error {
 			}
 			df.Backtest = &models.BacktestResult{Strategy: "saved", Parameters: map[string]float64{}, Available: true, Execution: "stored", Profit: df.Events.Profit(), CompletedTrades: df.Events.CompletedTrades()}
 		} else {
-			df.SetBacktest(request.strategy, request.params)
+			df.SetBacktest(request.strategy, request.params, strategyPolicy(config.Config).Costs)
 		}
 	}
 	return nil

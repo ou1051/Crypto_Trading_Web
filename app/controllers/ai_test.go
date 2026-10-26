@@ -63,6 +63,7 @@ func setupAI(t *testing.T, live bool) (*AI, *fakeBroker, bitflyer.Ticker) {
 	settings.DataLimit, settings.NumRanking = 365, 3
 	settings.UsePercent, settings.StopLimitPercent = .5, .9
 	settings.PaperBalance, settings.FeeRate = 100000, .01
+	settings.SlippageRate = 0 // Existing accounting fixtures isolate fees from price impact.
 	now := time.Now().UTC().Truncate(time.Minute).Add(time.Second)
 	quote := streamSample(now, 1, 10000, 1000)
 	quote.BestAsk, quote.BestBid = 10000, 9990
@@ -334,6 +335,82 @@ func TestFeeReserveDoesNotStrandAnUnsellableMinimumPosition(t *testing.T) {
 	}
 	if len(ai.state.Events) != 1 || ai.state.Events[0].Side != "BUY" || !ai.sellablePosition() {
 		t.Fatal("unsellable position prevented future trades")
+	}
+}
+
+func TestPaperSlippageUsesAdversePricesAndPreservesCashBudget(t *testing.T) {
+	ai, broker, quote := setupAI(t, false)
+	ai.settings.SlippageRate = .01
+	if err := ai.executeDecision(context.Background(), quote, models.TradeDecision{BuyVotes: 1}, 10000); err != nil {
+		t.Fatal(err)
+	}
+	if ai.state.Events[0].ExecutionPrice != 10100 || ai.state.Cash < 50000 {
+		t.Fatal("slippage did not affect entry sizing", ai.state.Events)
+	}
+	ai.state.LastBar = ai.state.LastBar.Add(time.Minute)
+	quote.BestBid = 12000
+	if err := ai.executeDecision(context.Background(), quote, models.TradeDecision{SellVotes: 1}, 12000); err != nil {
+		t.Fatal(err)
+	}
+	if len(ai.state.Events) != 2 || ai.state.Events[1].ExecutionPrice != 11880 || len(broker.calls) != 0 {
+		t.Fatal("paper exit did not use adverse slippage", ai.state.Events)
+	}
+	near(t, (&models.SignalEvents{Signals: ai.state.Events}).Profit(), ai.state.RealizedProfit)
+}
+
+func TestChangedResearchPolicyInvalidatesParametersWithoutLosingOrders(t *testing.T) {
+	ai, broker, quote := setupAI(t, true)
+	ai.state.Params = &models.TradeParams{EmaEnable: true, EmaPeriod1: 7, EmaPeriod2: 14}
+	if err := ai.executeDecision(context.Background(), quote, models.TradeDecision{BuyVotes: 1}, 10000); err != nil {
+		t.Fatal(err)
+	}
+	settings := ai.settings
+	settings.SlippageRate = .002
+	restarted, err := NewAI(settings, broker)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if restarted.state.Params != nil || restarted.state.Pending == nil || restarted.state.Pending.AcceptanceID != "JRF-owned" || len(broker.orders) != 1 {
+		t.Fatal("policy update lost order state or reused old parameters")
+	}
+}
+
+func TestStopRemainsAvailableWithoutEnoughIndicatorHistory(t *testing.T) {
+	ai, broker, quote := setupAI(t, false)
+	bar := ai.state.LastBar
+	ai.state.LastBar = bar.Add(-time.Minute)
+	ai.state.Quantity = .1
+	ai.state.Cost = 1000
+	ai.state.StopLimit = 9000
+	if err := models.NewCandle("BTC_USD", time.Minute, bar.Add(-time.Minute), 5000, 5000, 5000, 5000, 1).Create(); err != nil {
+		t.Fatal(err)
+	}
+	quote.BestBid = 4900
+	if err := ai.onBar(context.Background(), quote); err != nil {
+		t.Fatal(err)
+	}
+	if len(ai.state.Events) != 1 || ai.state.Events[0].Side != "SELL" || len(broker.calls) != 0 {
+		t.Fatal("indicator warmup disabled the stop")
+	}
+}
+
+func TestStaleQuoteCannotSubmitAnOrderWithinTheSameHourBar(t *testing.T) {
+	ai, broker, quote := setupAI(t, true)
+	ai.settings.TradeDuration = time.Hour
+	ai.state.Duration = time.Hour
+	now := ai.now().Truncate(time.Hour).Add(30 * time.Minute)
+	ai.now = func() time.Time { return now }
+	ai.state.LastBar = ai.now().Truncate(time.Hour)
+	ai.state.Version = 0
+	if err := ai.persist(); err != nil {
+		t.Fatal(err)
+	}
+	quote.Timestamp = ai.now().Add(-time.Minute).Format(time.RFC3339)
+	if err := ai.executeDecision(context.Background(), quote, models.TradeDecision{BuyVotes: 1}, 10000); err == nil {
+		t.Fatal("stale quote was accepted")
+	}
+	if len(broker.calls) != 0 || ai.state.Pending != nil || ai.storageFailed || !strings.Contains(ai.state.LastError, "stale") {
+		t.Fatal("stale decision reached the exchange")
 	}
 }
 

@@ -31,6 +31,9 @@ func TestBacktestAndOptimizationAPI(t *testing.T) {
 		if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &df) != nil || df.Events == nil || df.Backtest == nil || df.Backtest.Strategy != strategy || df.Backtest.Execution != "next_open" {
 			t.Fatalf("strategy=%s code=%d body=%s", strategy, w.Code, w.Body)
 		}
+		if df.Backtest.Costs == nil || df.Backtest.Costs.FeeRate != config.Config.FeeRate || df.Backtest.Costs.SlippageRate != config.Config.SlippageRate || df.Backtest.Profit > df.Backtest.GrossProfit+1e-9 {
+			t.Fatalf("research cost assumptions were not applied: %+v", df.Backtest)
+		}
 		for _, event := range df.Events.Signals {
 			if event.ProductCode != "BTC_USD" {
 				t.Fatal("wrong event product")
@@ -42,6 +45,9 @@ func TestBacktestAndOptimizationAPI(t *testing.T) {
 	var df models.DataFrameCandle
 	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &df) != nil || df.Optimization == nil || len(df.Optimization.Rankings) != 5 || df.Events != nil {
 		t.Fatalf("optimization failed: %d %s", w.Code, w.Body)
+	}
+	if df.Optimization.Policy == nil || df.Optimization.TrainingCount+df.Optimization.ValidationCount != len(df.Candles) || df.Optimization.BreakEvenRise <= 0 {
+		t.Fatal("optimization omitted validation/cost metadata")
 	}
 	var count int
 	if err := models.DbConnection.QueryRow(`SELECT COUNT(*) FROM signal_events`).Scan(&count); err != nil || count != 0 {

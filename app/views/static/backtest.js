@@ -68,7 +68,8 @@ window.CandleBacktests = (() => {
             position.textContent = `保有 ${Number(state.quantity).toFixed(8)} BTC ／ 確定損益 ${money(state.realized_profit)}${cash} ／ 損切り価格 ${state.stop_limit > 0 ? money(state.stop_limit) : '—'}`;
             const params = state.params || {};
             const selected = [['ema_enable','EMA'],['bb_enable','ボリンジャーバンド'],['ichimoku_enable','一目均衡表'],['macd_enable','MACD'],['rsi_enable','RSI']].filter(([key]) => params[key]).map(([,name]) => name);
-            strategyStatus.textContent = `採用指標：${selected.join('・') || 'データまたは次の最適化を待っています'}。${state.mode === 'paper' ? '仮想売買の手数料率' : '売却数量の手数料確保率'} ${(state.fee_rate * 100).toFixed(3)}%。`;
+            const slip = state.policy?.costs?.slippage_rate || 0;
+            strategyStatus.textContent = `採用指標：${selected.join('・') || 'データまたは次の最適化を待っています'}。${state.mode === 'paper' ? '仮想売買の手数料率' : '売却数量の手数料確保率'} ${(state.fee_rate * 100).toFixed(3)}%。${state.mode === 'paper' ? ` 仮想スリッページ ${(slip * 100).toFixed(3)}%／片道。` : ''}`;
         } else {
             status.textContent = '自動売買の開始を待っています。';
             position.textContent = '';
@@ -80,17 +81,23 @@ window.CandleBacktests = (() => {
             const shortage = data.backtest?.available === false ? '／計算に必要な本数が不足しています' : '';
             const countLabel = data.backtest?.strategy === 'auto' ? '売却約定' : '完了取引';
             profit.textContent = `${title}：確定損益 ${money(data.events.profit)} ／ ${countLabel} ${data.events.completed_trades}回${data.events.holding ? ' ／ 未決済あり' : ''}${shortage}`;
+            if (data.backtest?.costs) profit.textContent += ` ／ コスト前 ${money(data.backtest.gross_profit)}`;
         }
         if (!data.optimization) return;
         const result = data.optimization;
         ranking.hidden = false;
         rows.replaceChildren();
         const asOf = result.candle_count ? new Date(result.as_of).toISOString().replace('T',' ').slice(0,19) + ' UTC' : 'データなし';
-        caption.textContent = `比較時点：${asOf} ／ ${result.candle_count}本。この区間内の比較で、正の確定損益を持つ上位戦略を採用します。`;
+        if (result.policy) {
+            const costs = result.policy.costs;
+            caption.textContent = `比較時点：${asOf} ／ 調整 ${result.training_count}本・検証 ${result.validation_count}本。前半だけでパラメータを調整し、後半は未保有から評価します。両区間のコスト後損益が正、かつ検証で${result.policy.min_validation_trades}回以上の完了取引を採用条件とします。手数料 ${(costs.fee_rate*100).toFixed(3)}%／片道・全スプレッド ${(costs.spread_rate*100).toFixed(3)}%・スリッページ ${(costs.slippage_rate*100).toFixed(3)}%／片道。モデル上の往復損益分岐値幅は約 ${(result.break_even_rise*100).toFixed(3)}%です。検証区間も戦略選出に使うため、将来の成績を保証するものではありません。`;
+        } else {
+            caption.textContent = `比較時点：${asOf} ／ ${result.candle_count}本。`;
+        }
         for (const rank of result.rankings) {
             const row = document.createElement('tr');
             const parameters = Object.entries(rank.parameters).map(([key,value]) => `${parameterLabels[key] || key} ${value}`).join(' / ') || '9・26・52（固定）';
-            for (const value of [names[rank.strategy], rank.available ? money(rank.performance) : '完了取引なし', rank.completed_trades, parameters, rank.enable ? '採用' : '—']) {
+            for (const value of [names[rank.strategy], rank.training_profit == null ? '—' : money(rank.training_profit), rank.available ? money(rank.gross_performance ?? rank.performance) : '完了取引なし', rank.available ? money(rank.performance) : '完了取引なし', rank.completed_trades, parameters, rank.enable ? '採用' : '見送り']) {
                 const cell = document.createElement('td');
                 cell.textContent = String(value);
                 row.append(cell);

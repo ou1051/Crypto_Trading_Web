@@ -14,6 +14,8 @@ type BacktestResult struct {
 	Size            float64            `json:"size"`
 	Profit          float64            `json:"profit"`
 	CompletedTrades int                `json:"completed_trades"`
+	GrossProfit     float64            `json:"gross_profit"`
+	Costs           *TradingCosts      `json:"costs,omitempty"`
 }
 
 type TradeParams struct {
@@ -35,20 +37,28 @@ type TradeParams struct {
 }
 
 type Ranking struct {
-	Strategy        string             `json:"strategy"`
-	Enable          bool               `json:"enable"`
-	Available       bool               `json:"available"`
-	Performance     float64            `json:"performance"`
-	CompletedTrades int                `json:"completed_trades"`
-	Parameters      map[string]float64 `json:"parameters"`
+	Strategy         string             `json:"strategy"`
+	Enable           bool               `json:"enable"`
+	Available        bool               `json:"available"`
+	Performance      float64            `json:"performance"`
+	CompletedTrades  int                `json:"completed_trades"`
+	Parameters       map[string]float64 `json:"parameters"`
+	TrainingProfit   float64            `json:"training_profit"`
+	TrainingTrades   int                `json:"training_trades"`
+	GrossPerformance float64            `json:"gross_performance"`
 }
 
 type OptimizationResult struct {
-	Rankings     []Ranking    `json:"rankings"`
-	Parameters   *TradeParams `json:"parameters"`
-	BestStrategy string       `json:"best_strategy"`
-	CandleCount  int          `json:"candle_count"`
-	AsOf         time.Time    `json:"as_of"`
+	Rankings        []Ranking       `json:"rankings"`
+	Parameters      *TradeParams    `json:"parameters"`
+	BestStrategy    string          `json:"best_strategy"`
+	CandleCount     int             `json:"candle_count"`
+	AsOf            time.Time       `json:"as_of"`
+	Policy          *StrategyPolicy `json:"policy,omitempty"`
+	TrainingCount   int             `json:"training_count"`
+	ValidationCount int             `json:"validation_count"`
+	ValidationStart time.Time       `json:"validation_start"`
+	BreakEvenRise   float64         `json:"break_even_rise"`
 }
 
 func DefaultBacktestParams(strategy string) map[string]float64 {
@@ -79,25 +89,7 @@ func finite(values ...float64) bool {
 // Signals use a completed candle; fills use only the following candle's known open.
 // The last candle's changing close is never used to make a trade decision.
 func (df *DataFrameCandle) simulate(decision func(int) (bool, bool)) *SignalEvents {
-	if !validProductCode.MatchString(df.ProductCode) || df.Duration <= 0 || len(df.Candles) < 3 {
-		return nil
-	}
-	for i, candle := range df.Candles {
-		if candle.Time.IsZero() || !validAmount(candle.Open) || !validAmount(candle.Close) || !validAmount(candle.High) || !validAmount(candle.Low) || (i > 0 && !df.Candles[i-1].Time.Before(candle.Time)) {
-			return nil
-		}
-	}
-	events := NewSignalEvents()
-	for i := 1; i+1 < len(df.Candles); i++ {
-		buy, sell := decision(i)
-		fill := df.Candles[i+1]
-		if buy {
-			events.Buy(df.ProductCode, fill.Time, fill.Open, 1, false)
-		} else if sell {
-			events.Sell(df.ProductCode, fill.Time, fill.Open, 1, false)
-		}
-	}
-	return events
+	return df.simulateCosts(decision, TradingCosts{}, 2)
 }
 
 func (df *DataFrameCandle) indicatorFrame() *DataFrameCandle {
@@ -231,35 +223,34 @@ func (df *DataFrameCandle) BackTestRsi(period int, buyThreshold, sellThreshold f
 }
 
 func (df *DataFrameCandle) RunBacktest(strategy string, params map[string]float64) *SignalEvents {
-	switch strategy {
-	case "ema":
-		return df.BackTestEma(int(params["emaPeriod1"]), int(params["emaPeriod2"]))
-	case "bbands":
-		return df.BackTestBb(int(params["bbandsN"]), params["bbandsK"])
-	case "ichimoku":
-		return df.BackTestIchimoku()
-	case "macd":
-		return df.BackTestMacd(int(params["macdPeriod1"]), int(params["macdPeriod2"]), int(params["macdPeriod3"]))
-	case "rsi":
-		return df.BackTestRsi(int(params["rsiPeriod"]), params["rsiBuy"], params["rsiSell"])
-	}
-	return nil
+	return df.RunBacktestWithCosts(strategy, params, TradingCosts{})
 }
 
-func (df *DataFrameCandle) SetBacktest(strategy string, params map[string]float64) {
-	events := df.RunBacktest(strategy, params)
+func (df *DataFrameCandle) SetBacktest(strategy string, params map[string]float64, options ...TradingCosts) {
+	var costs TradingCosts
+	if len(options) > 0 {
+		costs = options[0]
+	}
+	events := df.RunBacktestWithCosts(strategy, params, costs)
 	available := events != nil
 	if events == nil {
 		events = NewSignalEvents()
 	}
 	df.Events = events
-	df.Backtest = &BacktestResult{Strategy: strategy, Parameters: params, Available: available, Execution: "next_open", Size: 1, Profit: events.Profit(), CompletedTrades: events.CompletedTrades()}
+	df.Backtest = &BacktestResult{Strategy: strategy, Parameters: params, Available: available, Execution: "next_open", Size: 1, Profit: events.Profit(), CompletedTrades: events.CompletedTrades(), Costs: &costs}
+	if gross := df.RunBacktest(strategy, params); gross != nil {
+		df.Backtest.GrossProfit = gross.Profit()
+	}
 }
 
-func (df *DataFrameCandle) optimizeStrategy(strategy string) Ranking {
+func (df *DataFrameCandle) optimizeStrategy(strategy string, options ...TradingCosts) Ranking {
+	var costs TradingCosts
+	if len(options) > 0 {
+		costs = options[0]
+	}
 	best := Ranking{Strategy: strategy, Parameters: DefaultBacktestParams(strategy)}
 	consider := func(params map[string]float64) {
-		events := df.RunBacktest(strategy, params)
+		events := df.RunBacktestWithCosts(strategy, params, costs)
 		if events == nil || events.CompletedTrades() == 0 || !finite(events.Profit()) {
 			return
 		}
@@ -343,29 +334,7 @@ func (df *DataFrameCandle) OptimizeStrategies(numRanking int) *OptimizationResul
 		if rank.Enable && result.BestStrategy == "" {
 			result.BestStrategy = rank.Strategy
 		}
-		params := rank.Parameters
-		switch rank.Strategy {
-		case "ema":
-			result.Parameters.EmaEnable = rank.Enable
-			result.Parameters.EmaPeriod1 = int(params["emaPeriod1"])
-			result.Parameters.EmaPeriod2 = int(params["emaPeriod2"])
-		case "bbands":
-			result.Parameters.BbEnable = rank.Enable
-			result.Parameters.BbN = int(params["bbandsN"])
-			result.Parameters.BbK = params["bbandsK"]
-		case "ichimoku":
-			result.Parameters.IchimokuEnable = rank.Enable
-		case "macd":
-			result.Parameters.MacdEnable = rank.Enable
-			result.Parameters.MacdFastPeriod = int(params["macdPeriod1"])
-			result.Parameters.MacdSlowPeriod = int(params["macdPeriod2"])
-			result.Parameters.MacdSignalPeriod = int(params["macdPeriod3"])
-		case "rsi":
-			result.Parameters.RsiEnable = rank.Enable
-			result.Parameters.RsiPeriod = int(params["rsiPeriod"])
-			result.Parameters.RsiBuyThread = params["rsiBuy"]
-			result.Parameters.RsiSellThread = params["rsiSell"]
-		}
+		assignRank(result.Parameters, *rank)
 	}
 	return result
 }

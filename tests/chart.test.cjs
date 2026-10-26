@@ -338,7 +338,7 @@ test('optimization runs only once and its parameters can be applied from the ran
     assert.match(app.elements.backtest_profit.textContent,/0 JPY/,'zero profit must be visible');
     await app.tick();
     assert.equal(new URL(app.requests.at(-1).url,'http://localhost').searchParams.has('optimize'),false,'periodic polling must not repeat optimization');
-    const apply = app.elements.ranking_rows.children[0].children[5].children[0];
+    const apply = app.elements.ranking_rows.children[0].children[7].children[0];
     apply.emit('click');
     const params = new URL(app.requests.at(-1).url,'http://localhost').searchParams;
     assert.equal(params.get('strategy'),'ema');
@@ -373,4 +373,22 @@ test('automatic trade markers use execution prices and group multiple fills in t
     assert.equal(row.at(-1),'BUY 0.01 BTC @ 100\nSELL 0.01 BTC @ 110');
     assert.match(app.elements.backtest_profit.textContent,/自動売買の記録.*売却約定/);
     assert.equal(signals.length,2);
+});
+
+test('research results show net costs, holdout counts, and the minimum trade requirement', async () => {
+    const app=application();
+    app.optimize();
+    const costs={fee_rate:.0012,spread_rate:.0005,slippage_rate:.0005};
+    const optimization={as_of:new Date(start).toISOString(),candle_count:100,training_count:70,validation_count:30,break_even_rise:.0039,
+        policy:{costs,min_validation_trades:2},rankings:[{strategy:'ema',available:true,enable:false,performance:-1,training_profit:5,gross_performance:10,completed_trades:1,parameters:{emaPeriod1:5,emaPeriod2:12}}]};
+    await app.respond(app.requests.length-1,candles(),200,{events:{signals:[],profit:-1,completed_trades:1},backtest:{strategy:'ema',costs,gross_profit:10},optimization});
+    assert.match(app.elements.ranking_caption.textContent,/調整 70本・検証 30本/);
+    assert.match(app.elements.ranking_caption.textContent,/2回以上/);
+    assert.match(app.elements.ranking_caption.textContent,/0\.390%/);
+    const cells=app.elements.ranking_rows.children[0].children;
+    assert.match(cells[1].textContent,/5 JPY/);
+    assert.match(cells[2].textContent,/10 JPY/);
+    assert.match(cells[3].textContent,/-1 JPY/);
+    assert.equal(cells[6].textContent,'見送り');
+    assert.match(app.elements.backtest_profit.textContent,/コスト前 10 JPY/);
 });

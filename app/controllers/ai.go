@@ -55,7 +55,8 @@ func NewAI(settings config.ConfigList, broker tradeBroker) (*AI, error) {
 	if settings.ProductCode != "BTC_JPY" && settings.ProductCode != "BTC_USD" && settings.ProductCode != "BTC_EUR" {
 		return nil, fmt.Errorf("automation supports BTC spot pairs only")
 	}
-	if broker == nil || settings.TradeDuration <= 0 || settings.DataLimit < 2 || settings.DataLimit > 1000 ||
+	policy := strategyPolicy(settings)
+	if broker == nil || !policy.Valid() || settings.TradeDuration <= 0 || settings.DataLimit < 2 || settings.DataLimit > 1000 ||
 		!(settings.UsePercent > 0 && settings.UsePercent <= 1) || !(settings.StopLimitPercent > 0 && settings.StopLimitPercent <= 1) ||
 		!(settings.FeeRate >= 0 && settings.FeeRate <= .1) || !(settings.PaperBalance > 0 && settings.PaperBalance <= 1e15) ||
 		settings.NumRanking < 1 || settings.NumRanking > 5 {
@@ -68,6 +69,13 @@ func NewAI(settings config.ConfigList, broker tradeBroker) (*AI, error) {
 	if state.Version == 0 && mode == "paper" {
 		state.Cash = settings.PaperBalance
 	}
+	if state.Policy == nil || *state.Policy != policy {
+		// Existing journals keep positions and pending orders, but parameters chosen
+		// under different costs or validation rules must be selected again.
+		state.Params = nil
+		state.OptimizedAt = time.Time{}
+	}
+	state.Policy = &policy
 	ai := &AI{broker: broker, settings: settings, state: state, now: time.Now}
 	// Never replay a historical signal on startup, even if the process was offline.
 	bar := ai.now().UTC().Truncate(settings.TradeDuration)
@@ -105,6 +113,10 @@ func (ai *AI) publish() {
 	if s.Params != nil {
 		params := *s.Params
 		status.Params = &params
+	}
+	if s.Policy != nil {
+		policy := *s.Policy
+		status.Policy = &policy
 	}
 	if s.Pending != nil {
 		pending := *s.Pending
@@ -193,11 +205,22 @@ func (ai *AI) onBar(ctx context.Context, ticker bitflyer.Ticker) error {
 		}
 	}
 	df.Candles = completed
-	if len(completed) < 2 || !completed[len(completed)-1].Time.Equal(bar.Add(-s.Duration)) {
+	if len(completed) == 0 || !completed[len(completed)-1].Time.Equal(bar.Add(-s.Duration)) {
 		return nil // Do not trade a stale signal when market data has a gap.
 	}
+	// Indicators assume evenly spaced bars. Rebuild their warmup after any gap.
+	for i := len(df.Candles) - 1; i > 0; i-- {
+		if df.Candles[i].Time.Sub(df.Candles[i-1].Time) != s.Duration {
+			df.Candles = df.Candles[i:]
+			break
+		}
+	}
 	if !s.Params.Enabled() {
-		s.Params = df.OptimizeParams(ai.settings.NumRanking)
+		selection, err := df.OptimizeValidated(*s.Policy)
+		if err != nil {
+			return ai.halt(err)
+		}
+		s.Params = selection.Parameters
 		s.OptimizedAt = bar
 		if err := ai.persist(); err != nil {
 			return err
@@ -221,6 +244,9 @@ func (ai *AI) executeDecision(ctx context.Context, ticker bitflyer.Ticker, decis
 	s := ai.state
 	if ctx.Err() != nil || s.Halted || s.Pending != nil {
 		return nil
+	}
+	if ticker.DateTime().IsZero() || math.Abs(ai.now().Sub(ticker.DateTime()).Seconds()) > 30 {
+		return ai.noteError(fmt.Errorf("stale decision quote"))
 	}
 	side := ""
 	if ai.sellablePosition() {
@@ -260,6 +286,9 @@ func (ai *AI) executeDecision(ctx context.Context, ticker bitflyer.Ticker, decis
 		quote = *fresh
 	}
 	price := quote.BestAsk
+	if s.Mode == "paper" {
+		price *= 1 + ai.settings.SlippageRate
+	}
 	size := 0.0
 	if side == "BUY" {
 		if !positive(price) || !positive(cash) {
@@ -268,6 +297,9 @@ func (ai *AI) executeDecision(ctx context.Context, ticker bitflyer.Ticker, decis
 		size = btcFloor(cash * ai.settings.UsePercent / price)
 	} else {
 		price = quote.BestBid
+		if s.Mode == "paper" {
+			price *= 1 - ai.settings.SlippageRate
+		}
 		if !positive(price) || !positive(available) {
 			return ai.noteError(fmt.Errorf("invalid sell quote or available balance"))
 		}

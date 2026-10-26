@@ -21,39 +21,41 @@ type PendingTrade struct {
 }
 
 type AutomationState struct {
-	Mode           string        `json:"mode"`
-	ProductCode    string        `json:"product_code"`
-	Duration       time.Duration `json:"duration"`
-	LastBar        time.Time     `json:"last_bar"`
-	Cash           float64       `json:"cash"`
-	Quantity       float64       `json:"quantity"`
-	Cost           float64       `json:"cost"`
-	StopLimit      float64       `json:"stop_limit"`
-	RealizedProfit float64       `json:"realized_profit"`
-	Params         *TradeParams  `json:"params"`
-	OptimizedAt    time.Time     `json:"optimized_at"`
-	Pending        *PendingTrade `json:"pending"`
-	Events         []SignalEvent `json:"events"`
-	Halted         bool          `json:"halted"`
-	LastError      string        `json:"last_error"`
-	Version        int64         `json:"-"`
+	Mode           string          `json:"mode"`
+	ProductCode    string          `json:"product_code"`
+	Duration       time.Duration   `json:"duration"`
+	LastBar        time.Time       `json:"last_bar"`
+	Cash           float64         `json:"cash"`
+	Quantity       float64         `json:"quantity"`
+	Cost           float64         `json:"cost"`
+	StopLimit      float64         `json:"stop_limit"`
+	RealizedProfit float64         `json:"realized_profit"`
+	Params         *TradeParams    `json:"params"`
+	Policy         *StrategyPolicy `json:"policy,omitempty"`
+	OptimizedAt    time.Time       `json:"optimized_at"`
+	Pending        *PendingTrade   `json:"pending"`
+	Events         []SignalEvent   `json:"events"`
+	Halted         bool            `json:"halted"`
+	LastError      string          `json:"last_error"`
+	Version        int64           `json:"-"`
 }
 
 type AutomationStatus struct {
-	Mode           string        `json:"mode"`
-	FeeRate        float64       `json:"fee_rate"`
-	ProductCode    string        `json:"product_code"`
-	Duration       time.Duration `json:"duration"`
-	LastBar        time.Time     `json:"last_bar"`
-	Cash           float64       `json:"cash"`
-	Quantity       float64       `json:"quantity"`
-	StopLimit      float64       `json:"stop_limit"`
-	RealizedProfit float64       `json:"realized_profit"`
-	Params         *TradeParams  `json:"params"`
-	OptimizedAt    time.Time     `json:"optimized_at"`
-	Pending        *PendingTrade `json:"pending"`
-	Halted         bool          `json:"halted"`
-	LastError      string        `json:"last_error"`
+	Mode           string          `json:"mode"`
+	FeeRate        float64         `json:"fee_rate"`
+	ProductCode    string          `json:"product_code"`
+	Duration       time.Duration   `json:"duration"`
+	LastBar        time.Time       `json:"last_bar"`
+	Cash           float64         `json:"cash"`
+	Quantity       float64         `json:"quantity"`
+	StopLimit      float64         `json:"stop_limit"`
+	RealizedProfit float64         `json:"realized_profit"`
+	Params         *TradeParams    `json:"params"`
+	Policy         *StrategyPolicy `json:"policy,omitempty"`
+	OptimizedAt    time.Time       `json:"optimized_at"`
+	Pending        *PendingTrade   `json:"pending"`
+	Halted         bool            `json:"halted"`
+	LastError      string          `json:"last_error"`
 }
 
 func LoadAutomationState(mode, product string, duration time.Duration) (*AutomationState, error) {
@@ -100,6 +102,9 @@ func validateAutomationState(state *AutomationState) error {
 	}
 	if state.Quantity == 0 && state.Cost != 0 {
 		return fmt.Errorf("invalid automation cost basis")
+	}
+	if state.Policy != nil && !state.Policy.Valid() {
+		return fmt.Errorf("invalid stored strategy policy")
 	}
 	if p := state.Pending; p != nil {
 		if (p.Side != "BUY" && p.Side != "SELL") || !validAmount(p.Size) || p.BarTime.IsZero() || p.CreatedAt.IsZero() {

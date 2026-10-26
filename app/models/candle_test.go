@@ -160,3 +160,23 @@ func TestDatabaseErrorsAndUnsafeParameters(t *testing.T) {
 		t.Error("database write error was hidden")
 	}
 }
+
+func TestInvalidBidAskCannotCreateOrChangeCandles(t *testing.T) {
+	setupDatabase(t, ":memory:")
+	stamp := time.Now().UTC().Truncate(time.Minute)
+	valid := quoteTicker(stamp, 100)
+	if _, err := CreateCandleWithDuration(valid, "BTC_USD", time.Minute, 0); err != nil {
+		t.Fatal(err)
+	}
+	for _, quote := range [][2]float64{{101, 99}, {0, 100}, {-1, 100}, {100, 0}} {
+		invalid := valid
+		invalid.BestBid, invalid.BestAsk = quote[0], quote[1]
+		if _, err := CreateCandleWithDuration(invalid, "BTC_USD", time.Minute, 100); err == nil {
+			t.Fatal("invalid quote was persisted", quote)
+		}
+	}
+	candle, err := GetCandle("BTC_USD", time.Minute, stamp)
+	if err != nil || candle.Close != 100 || candle.Volume != 0 {
+		t.Fatal("invalid quotes changed stored candle", candle, err)
+	}
+}
