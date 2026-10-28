@@ -22,6 +22,7 @@ func TestIchimokuUsesHighsAndLowsAndCorrectOffsets(t *testing.T) {
 	}
 }
 
+
 func TestHistoricalVolatilityUsesLogReturnsAndMatchesCandleIndexes(t *testing.T) {
 	values := Hv([]float64{100, 110, 99, 118.8}, 2)
 	if len(values) != 4 || !math.IsNaN(values[0]) || !math.IsNaN(values[1]) {
